@@ -1,0 +1,31 @@
+# npm packages and GitHub Actions, checked once a month. Minor and patch
+# updates come grouped in one pull request per ecosystem; a major version
+# comes on its own, since it can break things.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      npm:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # @types/node follows the Node version the app runs on (the Dockerfile's
+      # node:<major>-alpine), so it moves with that, never on its own.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]

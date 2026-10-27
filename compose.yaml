@@ -1,0 +1,14 @@
+# The app on the server, reached by Caddy (irmahs-labs/proxy) on the shared
+# `proxy` network under its alias. Rename `app` in the alias to the repo's name,
+# and use that name in the Caddyfile block.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    networks:
+      proxy:
+        aliases: [app]
+
+networks:
+  proxy:
+    external: true

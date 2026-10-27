@@ -1,0 +1,38 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # The template itself is never deployed, only the repos made from it.
+    if: github.repository != 'irmahs-labs/template'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+
+      # /srv/<repo> must exist and belong to deploy (see README.md). A private
+      # repo needs a deploy key and a github-<repo> Host in deploy's ~/.ssh/config
+      # instead of the https clone (alma-housila shows how).
+      - name: Deploy on server
+        run: |
+          ssh deploy@${{ secrets.DEPLOY_HOST }} 'set -e
+            cd /srv/${{ github.event.repository.name }}
+            [ -d .git ] || git clone https://github.com/${{ github.repository }}.git .
+            git fetch --depth 1 origin main
+            git reset --hard origin/main
+            docker network create proxy 2>/dev/null || true
+            docker compose up -d --build --remove-orphans --wait
+            docker image prune -f
+            docker builder prune -f --filter until=168h'

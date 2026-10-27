@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Lint and format, Type-check, Tests, Build and Docker build, shared by every
+  # irmahs-labs repo (irmahs-labs/workflows). Pass only what differs here, and add
+  # the app's own jobs (a database, a smoke test, browser tests) next to it.
+  app:
+    uses: irmahs-labs/workflows/.github/workflows/app-ci.yml@main
+
+  # The branch rules require a check named "checks". It fails if any job
+  # above failed, was cancelled or skipped; list new jobs in needs.
+  checks:
+    name: checks
+    if: always()
+    needs: [app]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: A job did not pass
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
