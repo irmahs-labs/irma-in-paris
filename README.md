@@ -5,6 +5,7 @@ Paris right now, at **https://irma-in-paris.irmahs.dev**: the weather, the next 
 | Section | Path | From |
 | --- | --- | --- |
 | Weather | `/` | [Open-Meteo](https://open-meteo.com) (no key) |
+| Île-de-France | `/region` | [Open-Meteo](https://open-meteo.com) for 29 towns: temperature, humidity, wind, the European AQI and pollen ([Copernicus CAMS](https://atmosphere.copernicus.eu)) (no key) |
 | Public transport | `/transport` | [PRIM](https://prim.iledefrance-mobilites.fr), Île-de-France Mobilités (key), and [Vélib' Métropole open data](https://www.velib-metropole.fr/donnees-open-data-gbfs-du-service-velib-metropole) (no key) |
 | Places I've been | `/places` | This app's Postgres, photos in Garage; restaurants picked from [Google Maps' Places API](https://developers.google.com/maps/documentation/places/web-service) (key) |
 
@@ -40,7 +41,7 @@ cp .env.example .env     # add your PRIM key to it
 npm install
 npm run db:up            # Postgres on localhost:5435, migrations applied
 npm run storage:up       # Garage on localhost:3900, with the photos bucket and key
-npm run map:fetch        # the map of Paris into maps/ (about 45 MB, once)
+npm run map:fetch        # the maps of Paris and Île-de-France into maps/ (about 75 MB, once)
 npm run dev:api          # the server on :3002
 npm run dev              # the site on http://localhost:5173
 ```
@@ -65,7 +66,7 @@ If the photos ever outgrow one disk, Garage adds nodes (another server, even ano
 
 ## Deploying
 
-Pushing to `main` deploys to `/srv/irma-in-paris`: Postgres and Garage start, Garage gets its bucket and key, the map of Paris is cut from Protomaps' daily build if there is none or it is over a month old (`scripts/map-fetch.sh`, into `/srv/irma-in-paris/maps`), pending migrations run, then the app is rebuilt and started on the `proxy` network as `irma-in-paris`. irmahs-labs/proxy routes `irma-in-paris.irmahs.dev` to it.
+Pushing to `main` deploys to `/srv/irma-in-paris`: Postgres and Garage start, Garage gets its bucket and key, the maps of Paris and Île-de-France are cut from Protomaps' daily build when there are none or they are over a month old (`scripts/map-fetch.sh`, into `/srv/irma-in-paris/maps`), pending migrations run, then the app is rebuilt and started on the `proxy` network as `irma-in-paris`. irmahs-labs/proxy routes `irma-in-paris.irmahs.dev` to it.
 
 ### First time
 

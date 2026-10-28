@@ -101,6 +101,36 @@ export interface VelibReport {
   stations: VelibStation[];
 }
 
+/** The pollen counted in Europe, from Copernicus through Open-Meteo. */
+export type PollenKind =
+  | "alder"
+  | "birch"
+  | "grass"
+  | "mugwort"
+  | "olive"
+  | "ragweed";
+
+/** One town on the Île-de-France map, now. */
+export interface TownNow {
+  name: string;
+  lat: number;
+  lon: number;
+  temp: number;
+  humidity: number;
+  windKmh: number;
+  /** Where the wind blows from, in degrees: 0 is north, 90 east. */
+  windFrom: number;
+  /** The European Air Quality Index, or null when it could not be read. */
+  aqi: number | null;
+  /** The most of any one pollen, in grains per m³, and which; null when it could not be read. */
+  pollen: { grains: number; kind: PollenKind } | null;
+}
+
+export interface RegionReport {
+  updatedAt: string;
+  towns: TownNow[];
+}
+
 export interface Photo {
   id: string;
   caption: string;

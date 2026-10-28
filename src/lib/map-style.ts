@@ -79,10 +79,14 @@ const DARK: Partial<Flavor> = {
 /** Icons need a sprite sheet the app does not carry; these layers only draw icons. */
 const WITHOUT = new Set(["pois", "roads_shields", "roads_oneway"]);
 
-/** Where the app serves the map of Paris and the label fonts, on its own origin. */
-export const MAP_FILE = "/tiles/paris.pmtiles";
+/** The maps the app serves on its own origin: Paris up close, Île-de-France from afar. */
+export type MapFile = "paris" | "idf";
 
-export const styleFor = (theme: Theme, origin: string): StyleSpecification => {
+export const styleFor = (
+  theme: Theme,
+  origin: string,
+  file: MapFile = "paris"
+): StyleSpecification => {
   const flavor: Flavor = {
     ...namedFlavor(theme),
     ...(theme === "dark" ? DARK : LIGHT),
@@ -98,7 +102,7 @@ export const styleFor = (theme: Theme, origin: string): StyleSpecification => {
         attribution:
           '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
         type: "vector",
-        url: `pmtiles://${origin}${MAP_FILE}`,
+        url: `pmtiles://${origin}/tiles/${file}.pmtiles`,
       },
     },
     version: 8,

@@ -81,7 +81,7 @@ const setUp = ({ prim = null }: { prim?: Prim | null } = {}) => {
   const app = createApp({
     appOrigin: ORIGIN,
     google,
-    mapFile: "/nowhere/paris.pmtiles",
+    mapDir: "/nowhere",
     newId: () =>
       `00000000-0000-4000-8000-${String((next += 1)).padStart(12, "0")}`,
     places: {
@@ -138,6 +138,7 @@ const setUp = ({ prim = null }: { prim?: Prim | null } = {}) => {
       },
     },
     prim,
+    region: () => Promise.reject(new Error("not in these tests")),
     storage,
     velib: () => Promise.reject(new Error("not in these tests")),
     weather: () => Promise.reject(new Error("not in these tests")),

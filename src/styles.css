@@ -1005,6 +1005,10 @@ select.field {
   border: var(--stroke-base) solid var(--outline);
   border-radius: var(--radius-md);
 }
+/* The region needs room for 29 towns, most of them close to Paris. */
+.map--idf {
+  height: 560px;
+}
 /* Over maplibre-gl.css, which makes the map relative and so zero high. */
 .map .map__canvas {
   position: absolute;
@@ -1024,13 +1028,17 @@ select.field {
 .map .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
   filter: var(--map-icons, none);
 }
-.map .maplibregl-ctrl-attrib {
+.map .maplibregl-ctrl-attrib,
+.map .maplibregl-ctrl-attrib.maplibregl-compact {
   background: var(--panel);
   color: var(--text);
   font: 400 11px/1.4 var(--body);
 }
 .map .maplibregl-ctrl-attrib a {
   color: var(--text-muted);
+}
+.map .maplibregl-ctrl-attrib-button {
+  filter: var(--map-icons, none);
 }
 .map .maplibregl-cooperative-gesture-screen {
   font: 700 15px/1.4 var(--body);
@@ -1130,6 +1138,106 @@ select.field {
   height: 10px;
   border: var(--stroke-base) solid var(--outline);
   border-radius: 3px;
+}
+
+/* ── Île-de-France ── */
+/* A value's colour: a swatch with the dark outline, on light and dark maps alike. */
+.swatch {
+  flex: none;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: var(--stroke-base) solid var(--outline);
+  border-radius: 50%;
+}
+/* A town's reading: its swatch and number, the number in the text colour. */
+.pin--reading {
+  min-width: 0;
+  min-height: 32px;
+  padding: 3px 9px 3px 5px;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 14px;
+}
+.pin--reading[aria-pressed="true"] {
+  background: var(--selected);
+  color: var(--on-selected);
+}
+.readings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+.readings div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.readings dt {
+  color: var(--text-muted);
+}
+.readings dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+.legend-key {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--ground);
+  border: var(--stroke-base) solid var(--outline);
+  border-radius: var(--radius-md);
+}
+.legend-key ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.legend-key li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.table-view summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+}
+.table-view__scroll {
+  margin-top: 10px;
+  overflow-x: auto;
+  background: var(--ground);
+  border: var(--stroke-base) solid var(--outline);
+  border-radius: var(--radius-md);
+}
+.table-view table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table-view th,
+.table-view td {
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--outline);
+}
+.table-view thead th {
+  color: var(--text-muted);
+  font: 600 12px/1.2 var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.table-view tbody tr:last-child > * {
+  border-bottom: 0;
 }
 
 /* ── places ── */
@@ -1421,6 +1529,34 @@ select.field {
   .map {
     flex-basis: 100%;
     height: 320px;
+  }
+  .map--idf {
+    height: 440px;
+  }
+  /* Five filters do not fit one row on a phone: a grid, the outline showing
+     through the gaps as the dividers. */
+  .segmented--wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 2px;
+    width: 100%;
+    background: var(--outline);
+  }
+  .segmented--wrap button + button {
+    border-left: 0;
+  }
+  .segmented--wrap button {
+    text-align: center;
+  }
+  .pin--reading {
+    min-height: 26px;
+    gap: 3px;
+    padding: 2px 7px 2px 4px;
+    font-size: 12px;
+  }
+  .pin--reading .swatch {
+    width: 10px;
+    height: 10px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

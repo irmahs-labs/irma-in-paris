@@ -14,6 +14,7 @@ import {
   removePlace,
 } from "./places";
 import { createPrim } from "./prim";
+import { fetchRegion } from "./region";
 import { askAccountService } from "./session";
 import { createStorage } from "./storage";
 import { fetchVelib } from "./velib";
@@ -34,7 +35,7 @@ const app = createApp({
   google: env.googleMapsApiKey
     ? createGooglePlaces({ apiKey: env.googleMapsApiKey })
     : null,
-  mapFile: env.mapFile,
+  mapDir: env.mapDir,
   places: {
     add: (place) => addPlace(pool, place),
     addPhoto: (photo) => addPhoto(pool, photo),
@@ -44,6 +45,7 @@ const app = createApp({
     removePhoto: (id) => removePhoto(pool, id),
   },
   prim: env.primApiKey ? createPrim({ apiKey: env.primApiKey }) : null,
+  region: () => fetchRegion(),
   storage: createStorage(env.s3),
   velib: () => fetchVelib(),
   weather: () => fetchWeather(),

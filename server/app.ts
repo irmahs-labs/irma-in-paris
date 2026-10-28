@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 import { Hono } from "hono";
 import type { Context, Next } from "hono";
@@ -14,6 +15,7 @@ import type {
   Me,
   Stop,
   PickedPlace,
+  RegionReport,
   Place,
   TrafficReport,
   VelibReport,
@@ -34,14 +36,16 @@ interface AppOptions {
   appOrigin: string;
   whoIs: WhoIs;
   weather: () => Promise<WeatherReport>;
+  /** The weather and air at every town on the Île-de-France map. */
+  region: () => Promise<RegionReport>;
   velib: () => Promise<VelibReport>;
   /** Null without a PRIM key: the transport routes then say so. */
   prim: Prim | null;
   /** Null without a Google Maps key: adding places then says so. */
   google: GooglePlaces | null;
   storage: Storage;
-  /** Where the PMTiles map of Paris is on disk. */
-  mapFile: string;
+  /** The folder the PMTiles maps are in: paris.pmtiles and idf.pmtiles. */
+  mapDir: string;
   places: {
     read: () => Promise<Place[]>;
     /** Null when that Google place is already on the map. */
@@ -80,6 +84,9 @@ const placeRequest = z.object({
   visitedOn: z.optional(z.string()),
 });
 
+/** The map files there are. */
+const MAP_FILES = new Set(["paris.pmtiles", "idf.pmtiles"]);
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const PLACE_ID = /^\d{1,18}$/u;
 
@@ -107,16 +114,18 @@ export const createApp = ({
   appOrigin,
   whoIs,
   weather,
+  region,
   velib,
   prim,
   google,
-  mapFile,
+  mapDir,
   storage,
   places,
   newId = randomUUID,
 }: AppOptions) => {
   const app = new Hono<{ Variables: Variables }>();
   const weatherCache = createCache<WeatherReport>({ ttlMs: 10 * 60_000 });
+  const regionCache = createCache<RegionReport>({ ttlMs: 15 * 60_000 });
   const velibCache = createCache<VelibReport>({ ttlMs: 60_000 });
   const trafficCache = createCache<TrafficReport>({ ttlMs: 2 * 60_000 });
 
@@ -136,9 +145,16 @@ export const createApp = ({
 
   app.get("/healthz", (c) => c.text("ok"));
 
-  app.on(["GET", "HEAD"], "/tiles/paris.pmtiles", (c) =>
-    serveRanges(mapFile, c.req.raw)
-  );
+  app.on(["GET", "HEAD"], "/tiles/:file", async (c) => {
+    const file = c.req.param("file") ?? "";
+
+    // Only the maps the app has, by name: never a path from the request.
+    if (!MAP_FILES.has(file)) {
+      return fail(c, 404, "map");
+    }
+
+    return await serveRanges(path.join(mapDir, file), c.req.raw);
+  });
 
   app.use("/api/*", (c, next) => {
     // Live data and admin rights; the photos set their own.
@@ -182,6 +198,16 @@ export const createApp = ({
       console.error("Weather", error);
 
       return fail(c, 502, "weather");
+    }
+  });
+
+  app.get("/api/region", async (c) => {
+    try {
+      return c.json(await regionCache("idf", region));
+    } catch (error) {
+      console.error("Île-de-France weather", error);
+
+      return fail(c, 502, "region");
     }
   });
 

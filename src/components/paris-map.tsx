@@ -17,6 +17,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { createPortal } from "react-dom";
 
 import { styleFor } from "../lib/map-style";
+import type { MapFile } from "../lib/map-style";
 import { useTheme } from "../lib/theme";
 
 export interface MapMarker {
@@ -33,6 +34,8 @@ interface ParisMapProps {
   focus?: string;
   /** "Map of …", for screen readers. */
   label: string;
+  /** Which map: Paris up close (the default), or Île-de-France from afar. */
+  file?: MapFile;
 }
 
 // Lets MapLibre read pmtiles:// sources, once for the whole page.
@@ -42,12 +45,18 @@ setWorkerUrl(workerUrl);
 
 const PARIS: [number, number] = [2.3488, 48.8534];
 
+/** How far each map zooms: Paris has street detail, Île-de-France only towns and main roads. */
+const ZOOMS: Record<MapFile, { min: number; max: number; start: number }> = {
+  idf: { max: 12, min: 7, start: 8 },
+  paris: { max: 18, min: 10, start: 11.5 },
+};
+
 /**
  * A real map of Paris: Protomaps' basemap, from the app's own PMTiles file
  * (OpenStreetMap data), drawn by MapLibre in Light or Dark Matcha, with the
  * pins as React buttons on top. Nothing is asked of any other site.
  */
-const ParisMap = ({ markers, focus, label }: ParisMapProps) => {
+const ParisMap = ({ markers, focus, label, file = "paris" }: ParisMapProps) => {
   const theme = useTheme();
   const box = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<MapLibre | null>(null);
@@ -78,10 +87,10 @@ const ParisMap = ({ markers, focus, label }: ParisMapProps) => {
       container: box.current,
       // A page scrolls past the map; two fingers, or Ctrl and the wheel, move it.
       cooperativeGestures: true,
-      maxZoom: 18,
-      minZoom: 10,
-      style: styleFor(theme, window.location.origin),
-      zoom: 11.5,
+      maxZoom: ZOOMS[file].max,
+      minZoom: ZOOMS[file].min,
+      style: styleFor(theme, window.location.origin, file),
+      zoom: ZOOMS[file].start,
     });
 
     created.addControl(
@@ -99,8 +108,8 @@ const ParisMap = ({ markers, focus, label }: ParisMapProps) => {
   }, []);
 
   useEffect(() => {
-    map?.setStyle(styleFor(theme, window.location.origin));
-  }, [map, theme]);
+    map?.setStyle(styleFor(theme, window.location.origin, file));
+  }, [map, theme, file]);
 
   useEffect(() => {
     if (!map) {
@@ -140,7 +149,11 @@ const ParisMap = ({ markers, focus, label }: ParisMapProps) => {
         bounds.extend([marker.lon, marker.lat]);
       }
 
-      map.fitBounds(bounds, { animate: false, maxZoom: 15, padding: 48 });
+      map.fitBounds(bounds, {
+        animate: false,
+        maxZoom: Math.min(15, ZOOMS[file].max),
+        padding: 24,
+      });
       fitted.current = true;
     }
   });
@@ -156,7 +169,7 @@ const ParisMap = ({ markers, focus, label }: ParisMapProps) => {
   }, [map, focus]);
 
   return (
-    <div className="map" role="region" aria-label={label}>
+    <div className={`map map--${file}`} role="region" aria-label={label}>
       <div ref={box} className="map__canvas" />
       {markers.map((marker) =>
         createPortal(marker.node, elementFor(marker.id), marker.id)

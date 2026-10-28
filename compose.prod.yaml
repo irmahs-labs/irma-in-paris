@@ -5,7 +5,7 @@
 # database password twice (as is for Postgres, and percent-encoded as
 # POSTGRES_PASSWORD_URL for the postgres:// URLs, where a / or @ would break
 # them), Garage's RPC secret, the app's S3 secret key, and the PRIM and
-# Google Maps keys. The map of Paris is a file in ./maps, from
+# Google Maps keys. The maps are files in ./maps, from
 # scripts/map-fetch.sh. The
 # database and Garage are reachable only on the internal network; Caddy
 # reaches the app on the shared `proxy` network as `irma-in-paris:3000`, and
@@ -87,7 +87,7 @@ services:
       PRIM_API_KEY: ${PRIM_API_KEY:-}
       # Optional: without it no restaurant can be added.
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
-      MAP_FILE: /app/maps/paris.pmtiles
+      MAP_DIR: /app/maps
     volumes:
       - ./maps:/app/maps:ro
     depends_on:
