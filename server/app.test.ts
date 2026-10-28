@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { Place } from "../src/lib/api";
 import { createApp } from "./app";
 import { fakeJpeg } from "./fixtures/jpeg";
-import type { Found } from "./geocode";
+import type { GooglePlace, GooglePlaces } from "./google-places";
 import type { NewPhoto, NewPlace } from "./places";
-import type { Prim } from "./prim";
+import type { Prim, PrimLine } from "./prim";
 import type { Visitor } from "./session";
 import type { Storage } from "./storage";
 
@@ -21,15 +21,40 @@ const VISITORS = new Map<string, Visitor>([
   ],
 ]);
 
-const ROQUETTE: Found = {
-  address: "12 Rue de la Roquette 75011 Paris",
-  area: "11e",
-  lat: 48.8536,
-  lon: 2.3707,
+const SESSION = "11111111-2222-4333-8444-555555555555";
+
+const CAMBODGE: GooglePlace = {
+  address: "20 Rue Alibert, 75010 Paris, France",
+  area: "10th",
+  cuisine: "Asian",
+  lat: 48.8714,
+  lon: 2.3672,
+  mapsUrl: "https://maps.google.com/?cid=1",
+  name: "Le Petit Cambodge",
+  placeId: "ChIJ-petit-cambodge",
+};
+
+/** Stands in for Google Maps: one restaurant, one museum. */
+const google: GooglePlaces = {
+  details: (placeId) =>
+    Promise.resolve(placeId === CAMBODGE.placeId ? CAMBODGE : null),
+  search: (input) =>
+    Promise.resolve(
+      input.includes("petit")
+        ? [
+            {
+              address: "Rue Alibert, Paris",
+              name: CAMBODGE.name,
+              placeId: CAMBODGE.placeId,
+            },
+          ]
+        : []
+    ),
 };
 
 /** A fresh app over in-memory stand-ins for the database, Garage and the APIs. */
 const setUp = ({ prim = null }: { prim?: Prim | null } = {}) => {
+  const seen = new Set<string>();
   const rows: Place[] = [];
   const objects = new Map<string, Uint8Array>();
   let next = 0;
@@ -55,12 +80,18 @@ const setUp = ({ prim = null }: { prim?: Prim | null } = {}) => {
 
   const app = createApp({
     appOrigin: ORIGIN,
-    geocode: (address) =>
-      Promise.resolve(address.includes("Roquette") ? ROQUETTE : null),
+    google,
+    mapDir: "/nowhere",
     newId: () =>
       `00000000-0000-4000-8000-${String((next += 1)).padStart(12, "0")}`,
     places: {
-      add: (place: NewPlace) => {
+      add: ({ googlePlaceId, ...place }: NewPlace) => {
+        if (seen.has(googlePlaceId)) {
+          return Promise.resolve(null);
+        }
+
+        seen.add(googlePlaceId);
+
         const added = { ...place, id: String(rows.length + 1), photos: [] };
 
         rows.push(added);
@@ -107,6 +138,7 @@ const setUp = ({ prim = null }: { prim?: Prim | null } = {}) => {
       },
     },
     prim,
+    region: () => Promise.reject(new Error("not in these tests")),
     storage,
     velib: () => Promise.reject(new Error("not in these tests")),
     weather: () => Promise.reject(new Error("not in these tests")),
@@ -154,9 +186,9 @@ const photoForm = (
 };
 
 const ROQUETTE_PLACE = {
-  address: "12 rue de la Roquette",
   cuisine: "Cambodian",
-  name: "Le Petit Cambodge",
+  placeId: CAMBODGE.placeId,
+  session: SESSION,
 };
 
 describe("/api/me", () => {
@@ -216,21 +248,61 @@ describe("adding and removing places", () => {
 
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({
-      address: ROQUETTE.address,
-      area: "11e",
+      address: CAMBODGE.address,
+      area: "10th",
+      cuisine: "Cambodian",
+      mapsUrl: CAMBODGE.mapsUrl,
       name: "Le Petit Cambodge",
       visitedOn: "2026-10-12",
     });
+    expect(
+      await jsonOf(app.request("/api/places", post(ROQUETTE_PLACE)))
+    ).toEqual({ error: "already-added" });
   });
 
-  it("refuses a place without a name, a bad date, or an address that cannot be found", async () => {
+  it("searches Google Maps only for an admin", async () => {
+    const { app } = setUp();
+    const search = `/api/places/search?q=petit&session=${SESSION}`;
+
+    expect(
+      await statusOf(
+        app.request(search, { headers: { cookie: "session=friend" } })
+      )
+    ).toBe(403);
+    expect(
+      await jsonOf(
+        app.request(search, { headers: { cookie: "session=admin" } })
+      )
+    ).toEqual([
+      {
+        address: "Rue Alibert, Paris",
+        name: "Le Petit Cambodge",
+        placeId: CAMBODGE.placeId,
+      },
+    ]);
+    expect(
+      await jsonOf(
+        app.request(
+          `/api/places/pick?id=${CAMBODGE.placeId}&session=${SESSION}`,
+          { headers: { cookie: "session=admin" } }
+        )
+      )
+    ).toEqual({
+      address: CAMBODGE.address,
+      cuisine: "Asian",
+      name: CAMBODGE.name,
+      placeId: CAMBODGE.placeId,
+    });
+  });
+
+  it("refuses a cuisine off the menu, a bad date, or a place Google does not list as a restaurant", async () => {
     const { app } = setUp();
 
     expect(
       await statusOf(
         app.request(
           "/api/places",
-          post({ address: "12 rue de la Roquette", name: "  " })
+          post({ ...ROQUETTE_PLACE, cuisine: "Martian" })
         )
       )
     ).toBe(400);
@@ -242,14 +314,22 @@ describe("adding and removing places", () => {
         )
       )
     ).toBe(400);
+    expect(
+      await statusOf(
+        app.request(
+          "/api/places",
+          post({ cuisine: "French", session: SESSION })
+        )
+      )
+    ).toBe(400);
 
-    const nowhere = await app.request(
+    const museum = await app.request(
       "/api/places",
-      post({ address: "nowhere", name: "Ghost" })
+      post({ ...ROQUETTE_PLACE, placeId: "ChIJ-the-louvre" })
     );
 
-    expect(nowhere.status).toBe(422);
-    expect(await nowhere.json()).toEqual({ error: "address" });
+    expect(museum.status).toBe(422);
+    expect(await museum.json()).toEqual({ error: "not-a-restaurant" });
   });
 
   it("takes a place's photos out of Garage with it", async () => {
@@ -410,32 +490,56 @@ describe("photos", () => {
 });
 
 describe("transport", () => {
-  it("says live times are off without a PRIM key", async () => {
+  const METRO_1: PrimLine = {
+    code: "1",
+    colour: "#ffcd00",
+    ink: "#000000",
+    key: "metro:1",
+    mode: "metro",
+    prim: "line:IDFM:C01371",
+    title: "Metro 1",
+  };
+
+  it("says live times are off without a PRIM key, and still lists every line", async () => {
     const { app } = setUp();
 
     const response = await app.request(
-      "/api/transport/departures?line=1&dir=0&stop=Châtelet"
+      "/api/transport/departures?line=metro:1&stop=stop_area:IDFM:71264"
     );
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "no-prim-key" });
+
+    const lines = await jsonOf(app.request("/api/transport/lines"));
+
+    expect(lines.live).toBe(false);
+    expect(lines.lines).toHaveLength(29);
   });
 
-  it("asks PRIM only for a stop a train can be boarded at that way", async () => {
+  it("asks PRIM only for a stop on that line, as PRIM lists it", async () => {
     const asked: string[] = [];
 
     const prim: Prim = {
-      departures: (line, direction, stop) => {
-        asked.push(`${line.id} ${direction} ${stop}`);
+      departures: (line, stopId) => {
+        asked.push(`${line.key} ${stopId}`);
 
-        return Promise.resolve({ trains: [{ at: "14:31", minutes: 1 }] });
+        return Promise.resolve({
+          directions: [
+            { towards: "La Défense", trains: [{ at: "14:31", minutes: 1 }] },
+          ],
+        });
       },
-      status: (line) =>
-        Promise.resolve({
-          detail: "Traffic normal on the whole line",
-          id: line.id,
-          level: "ok",
-        }),
+      lines: () => Promise.resolve([METRO_1]),
+      statuses: (lines) =>
+        Promise.resolve(
+          lines.map((line) => ({
+            detail: "Traffic normal on the whole line",
+            key: line.key,
+            level: "ok" as const,
+          }))
+        ),
+      stops: () =>
+        Promise.resolve([{ id: "stop_area:IDFM:71264", name: "Châtelet" }]),
     };
 
     const { app } = setUp({ prim });
@@ -443,16 +547,41 @@ describe("transport", () => {
     const ask = (query: string) =>
       app.request(`/api/transport/departures?${query}`);
 
-    expect(await statusOf(ask("line=1&dir=0&stop=Châtelet"))).toBe(200);
-    expect(await statusOf(ask("line=1&dir=0&stop=Château de Vincennes"))).toBe(
+    expect(await statusOf(ask("line=metro:1&stop=stop_area:IDFM:71264"))).toBe(
+      200
+    );
+    expect(await statusOf(ask("line=metro:1&stop=stop_area:IDFM:99999"))).toBe(
       400
     );
-    expect(await statusOf(ask("line=2&dir=0&stop=Châtelet"))).toBe(400);
-    expect(await statusOf(ask("line=1&dir=2&stop=Châtelet"))).toBe(400);
-    expect(asked).toEqual(["1 0 Châtelet"]);
+    expect(await statusOf(ask("line=metro:2&stop=stop_area:IDFM:71264"))).toBe(
+      400
+    );
+    expect(asked).toEqual(["metro:1 stop_area:IDFM:71264"]);
+
+    const lines = await jsonOf(app.request("/api/transport/lines"));
+
+    expect(lines).toEqual({
+      lines: [
+        {
+          code: "1",
+          colour: "#ffcd00",
+          ink: "#000000",
+          key: "metro:1",
+          mode: "metro",
+          title: "Metro 1",
+        },
+      ],
+      live: true,
+    });
 
     const status = await jsonOf(app.request("/api/transport/status"));
 
-    expect(status.lines).toHaveLength(8);
+    expect(status.lines).toEqual([
+      {
+        detail: "Traffic normal on the whole line",
+        key: "metro:1",
+        level: "ok",
+      },
+    ]);
   });
 });

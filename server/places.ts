@@ -3,6 +3,8 @@ import type { Pool } from "pg";
 import type { Photo, Place } from "../src/lib/api";
 
 export interface NewPlace {
+  googlePlaceId: string;
+  mapsUrl: string;
   name: string;
   cuisine: string;
   address: string;
@@ -24,6 +26,7 @@ export interface NewPhoto {
 
 interface PlaceRow {
   id: string;
+  google_maps_url: string | null;
   name: string;
   cuisine: string;
   address: string;
@@ -43,13 +46,14 @@ const toPlace = (row: PlaceRow): Place => ({
   id: row.id,
   lat: row.lat,
   lon: row.lon,
+  mapsUrl: row.google_maps_url,
   name: row.name,
   photos: row.photos,
   visitedOn: row.visited_on,
 });
 
 const SELECT_PLACES = `
-  select p.id::text, p.name, p.cuisine, p.address, p.area,
+  select p.id::text, p.google_maps_url, p.name, p.cuisine, p.address, p.area,
          to_char(p.visited_on, 'YYYY-MM-DD') as visited_on, p.dish, p.lat, p.lon,
          coalesce(
            json_agg(
@@ -72,12 +76,19 @@ export const readPlaces = async (pool: Pool): Promise<Place[]> => {
   return rows.map(toPlace);
 };
 
-export const addPlace = async (pool: Pool, place: NewPlace): Promise<Place> => {
+/** The new place, or null when that Google place is already on the map. */
+export const addPlace = async (
+  pool: Pool,
+  place: NewPlace
+): Promise<Place | null> => {
   const { rows } = await pool.query<{ id: string }>(
-    `insert into places (name, cuisine, address, area, visited_on, dish, lat, lon)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+    `insert into places (google_place_id, google_maps_url, name, cuisine, address, area, visited_on, dish, lat, lon)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     on conflict (google_place_id) do nothing
      returning id::text`,
     [
+      place.googlePlaceId,
+      place.mapsUrl,
       place.name,
       place.cuisine,
       place.address,
@@ -89,7 +100,15 @@ export const addPlace = async (pool: Pool, place: NewPlace): Promise<Place> => {
     ]
   );
 
-  return { ...place, id: rows[0]?.id ?? "", photos: [] };
+  const [row] = rows;
+
+  if (!row) {
+    return null;
+  }
+
+  const { googlePlaceId: _id, ...shown } = place;
+
+  return { ...shown, id: row.id, photos: [] };
 };
 
 /** The ids of the photos that went with it, so their files can go too; null when there was no such place. */

@@ -4,7 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp } from "./app";
 import { connect } from "./db";
 import { env } from "./env";
-import { geocode } from "./geocode";
+import { createGooglePlaces } from "./google-places";
 import {
   addPhoto,
   addPlace,
@@ -14,6 +14,7 @@ import {
   removePlace,
 } from "./places";
 import { createPrim } from "./prim";
+import { fetchRegion } from "./region";
 import { askAccountService } from "./session";
 import { createStorage } from "./storage";
 import { fetchVelib } from "./velib";
@@ -21,13 +22,20 @@ import { fetchWeather } from "./weather";
 
 const pool = connect(env.databaseUrl);
 
+if (!env.googleMapsApiKey) {
+  console.warn("GOOGLE_MAPS_API_KEY is not set: places cannot be added");
+}
+
 if (!env.primApiKey) {
   console.warn("PRIM_API_KEY is not set: live transport times are off");
 }
 
 const app = createApp({
   appOrigin: env.appOrigin,
-  geocode: geocode(),
+  google: env.googleMapsApiKey
+    ? createGooglePlaces({ apiKey: env.googleMapsApiKey })
+    : null,
+  mapDir: env.mapDir,
   places: {
     add: (place) => addPlace(pool, place),
     addPhoto: (photo) => addPhoto(pool, photo),
@@ -37,6 +45,7 @@ const app = createApp({
     removePhoto: (id) => removePhoto(pool, id),
   },
   prim: env.primApiKey ? createPrim({ apiKey: env.primApiKey }) : null,
+  region: () => fetchRegion(),
   storage: createStorage(env.s3),
   velib: () => fetchVelib(),
   weather: () => fetchWeather(),

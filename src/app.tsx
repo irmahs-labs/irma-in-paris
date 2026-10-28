@@ -7,6 +7,7 @@ import { Icon } from "./lib/icon";
 import type { IconName } from "./lib/icon";
 import { Link, usePath } from "./lib/router";
 import { PlacesScreen } from "./screens/places";
+import { RegionScreen } from "./screens/region";
 import { TransportScreen } from "./screens/transport";
 import { WeatherScreen } from "./screens/weather";
 
@@ -23,7 +24,7 @@ const SECTIONS: readonly Section[] = [
     Screen: WeatherScreen,
     hint: "Now and the next 7 days",
     icon: "weather",
-    name: "météo",
+    name: "weather",
     path: "/",
   },
   {
@@ -32,6 +33,13 @@ const SECTIONS: readonly Section[] = [
     icon: "train",
     name: "public transport",
     path: "/transport",
+  },
+  {
+    Screen: RegionScreen,
+    hint: "Pollen, pollution, weather by town",
+    icon: "map",
+    name: "Île-de-France",
+    path: "/region",
   },
   {
     Screen: PlacesScreen,

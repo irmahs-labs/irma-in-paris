@@ -20,6 +20,12 @@ export const env = {
   // server's shared network, http://localhost:3001 locally.
   authUrl: required("AUTH_INTERNAL_URL"),
   databaseUrl: required("DATABASE_URL"),
+  // Google's Places API, for finding restaurants by name. Optional: without
+  // it the places can still be looked at, but none can be added.
+  googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || undefined,
+  // The maps of Paris and Île-de-France (scripts/map-fetch.sh), served to
+  // MapLibre in ranges.
+  mapDir: process.env.MAP_DIR ?? "maps",
   port: Number(process.env.PORT ?? 3002),
   // Île-de-France Mobilités' PRIM. Optional: without it the transport
   // screen says live times are off, and everything else still works.

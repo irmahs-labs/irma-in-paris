@@ -170,7 +170,7 @@ export const WeatherScreen = () => {
   return (
     <>
       <div className="content__head">
-        <h2 className="display page__title">Météo</h2>
+        <h2 className="display page__title">Weather</h2>
         <p className="page__sub">Right now in Paris, and the week ahead.</p>
       </div>
       <div className="row">

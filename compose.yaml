@@ -39,6 +39,14 @@ services:
       db:
         condition: service_healthy
 
+  # go-pmtiles, which cuts Paris out of Protomaps' daily OpenStreetMap
+  # build; only scripts/map-fetch.sh runs it.
+  map:
+    image: protomaps/go-pmtiles:v1.31.1
+    profiles: [tools]
+    volumes:
+      - ./maps:/maps
+
   garage:
     image: dxflrs/garage:v2.4.1
     environment:

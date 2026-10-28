@@ -70,8 +70,8 @@ describe("toVelibReport", () => {
 
 describe("spreadOut", () => {
   it("keeps one station per cell of the map, the one nearest its middle", () => {
-    const near = station("near", 48.8645, 2.3325);
-    const far = station("far", 48.871, 2.326);
+    const near = station("near", 48.868, 2.3315);
+    const far = station("far", 48.8715, 2.326);
     const outside = station("outside", 48.9, 2.3);
     const picked = spreadOut([far, near, outside], CENTRAL_PARIS);
 

@@ -1,16 +1,19 @@
-# Paris Live
+# Irma in Paris
 
-Paris right now, at **https://irma-in-paris.irmahs.dev**: the weather, the next metro, Vélib' bikes and line status, and the restaurants I've eaten at, with photos.
+Paris right now, at **https://irma-in-paris.irmahs.dev**: the weather, the next train on every metro, RER and Transilien line, Vélib' bikes and line status, and the restaurants I've eaten at, on a map, with photos.
 
 | Section | Path | From |
 | --- | --- | --- |
-| Météo | `/` | [Open-Meteo](https://open-meteo.com) (no key) |
+| Weather | `/` | [Open-Meteo](https://open-meteo.com) (no key) |
+| Île-de-France | `/region` | [Open-Meteo](https://open-meteo.com) for 29 towns: temperature, humidity, wind, the European AQI and pollen ([Copernicus CAMS](https://atmosphere.copernicus.eu)) (no key) |
 | Public transport | `/transport` | [PRIM](https://prim.iledefrance-mobilites.fr), Île-de-France Mobilités (key), and [Vélib' Métropole open data](https://www.velib-metropole.fr/donnees-open-data-gbfs-du-service-velib-metropole) (no key) |
-| Places I've been | `/places` | This app's Postgres, photos in Garage; addresses found with the [Géoplateforme geocoder](https://geoservices.ign.fr/documentation/services/services-geoplateforme/geocodage) (no key) |
+| Places I've been | `/places` | This app's Postgres, photos in Garage; restaurants picked from [Google Maps' Places API](https://developers.google.com/maps/documentation/places/web-service) (key) |
+
+The maps are [Protomaps](https://protomaps.com)' OpenStreetMap basemap, drawn by [MapLibre](https://maplibre.org) in Light and Dark Matcha from one file the app serves itself: no map service is asked anything.
 
 Anyone can look. Only admins can add or remove places and photos: whoever the account service lists for `alma-housila` in its `APP_ACCESS` secret (irmahs-labs/auth), the same list Mini Games and the landing page use.
 
-Built with Vite, React 19 and Hono on Node 24, Postgres 17 with dbmate, and Garage for the photos. Styled in Cute Matcha's app look, in Light and Dark Matcha.
+Built with Vite, React 19 and Hono on Node 24, Postgres 17 with dbmate, Garage for the photos, and MapLibre with PMTiles for the maps. Styled in Cute Matcha's app look, in Light and Dark Matcha.
 
 ## The PRIM key
 
@@ -18,6 +21,16 @@ Built with Vite, React 19 and Hono on Node 24, Postgres 17 with dbmate, and Gara
 - **Locally:** the `PRIM_API_KEY=` line in `.env` (copied from `.env.example`, ignored by git).
 
 Without it everything else works, and the transport screen says live times are off.
+
+## The Google Maps key
+
+Adding a restaurant means searching for it by name and picking it from Google Maps, so only real restaurants go on the map. The key stays on the server.
+
+1. [Google Cloud console](https://console.cloud.google.com) → the **irmahs-hub** project → APIs & Services → Library → **Places API (New)** → Enable. It needs a billing account; searching and picking a few restaurants a month stays inside Google's free monthly allowance.
+2. APIs & Services → Credentials → Create credentials → API key. Under _API restrictions_, allow only **Places API (New)**.
+3. Add it as the repository secret **`GOOGLE_MAPS_API_KEY`**, and locally on the `GOOGLE_MAPS_API_KEY=` line in `.env`.
+
+Without it the places still show; the add form says it needs the key.
 
 ## Local development
 
@@ -28,6 +41,7 @@ cp .env.example .env     # add your PRIM key to it
 npm install
 npm run db:up            # Postgres on localhost:5435, migrations applied
 npm run storage:up       # Garage on localhost:3900, with the photos bucket and key
+npm run map:fetch        # the maps of Paris and Île-de-France into maps/ (about 75 MB, once)
 npm run dev:api          # the server on :3002
 npm run dev              # the site on http://localhost:5173
 ```
@@ -52,7 +66,7 @@ If the photos ever outgrow one disk, Garage adds nodes (another server, even ano
 
 ## Deploying
 
-Pushing to `main` deploys to `/srv/irma-in-paris`: Postgres and Garage start, Garage gets its bucket and key, pending migrations run, then the app is rebuilt and started on the `proxy` network as `irma-in-paris`. irmahs-labs/proxy routes `irma-in-paris.irmahs.dev` to it.
+Pushing to `main` deploys to `/srv/irma-in-paris`: Postgres and Garage start, Garage gets its bucket and key, the maps of Paris and Île-de-France are cut from Protomaps' daily build when there are none or they are over a month old (`scripts/map-fetch.sh`, into `/srv/irma-in-paris/maps`), pending migrations run, then the app is rebuilt and started on the `proxy` network as `irma-in-paris`. irmahs-labs/proxy routes `irma-in-paris.irmahs.dev` to it.
 
 ### First time
 
@@ -72,6 +86,7 @@ Settings → Secrets and variables → Actions:
 | `IRMA_IN_PARIS_GARAGE_RPC_SECRET` | Garage's own secret between its processes. Must be 64 hex characters | `openssl rand -hex 32` |
 | `IRMA_IN_PARIS_S3_SECRET_KEY` | The app's Garage secret key. Must be 64 hex characters. Its key id is in `deploy.yml`, as it is not secret | `openssl rand -hex 32` |
 | `PRIM_API_KEY` | Optional. The PRIM key, see above | From PRIM |
+| `GOOGLE_MAPS_API_KEY` | Optional. For adding restaurants, see above | From Google Cloud |
 
 Change `IRMA_IN_PARIS_S3_SECRET_KEY` after the first deploy and Garage keeps the old one: delete the key on the server (`docker compose -f compose.prod.yaml exec garage /garage key delete --yes <key id>`) and redeploy to import the new one.
 

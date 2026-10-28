@@ -1,3 +1,5 @@
+import type { TransitLine } from "../data/lines";
+
 /**
  * What the server's /api answers, shared by the server that builds it and
  * the screens that show it.
@@ -55,9 +57,10 @@ export interface WeatherReport {
 export type LineLevel = "ok" | "warn" | "works";
 
 export interface LineStatus {
-  id: string;
+  /** The line's key in this app: "metro:1", "rer:A", "transilien:H". */
+  key: string;
   level: LineLevel;
-  /** What is happening, in PRIM's words, or that traffic is normal. */
+  /** What is happening, in English, or that traffic is normal. */
   detail: string;
 }
 
@@ -66,9 +69,21 @@ export interface TrafficReport {
   lines: LineStatus[];
 }
 
+export interface LinesReport {
+  lines: TransitLine[];
+  /** False without the PRIM key: the lines show, but no stops or times. */
+  live: boolean;
+}
+
+export interface Stop {
+  /** PRIM's stop area id. */
+  id: string;
+  name: string;
+}
+
 export interface Departures {
-  /** The next trains from the stop, soonest first. */
-  trains: { minutes: number; at: string }[];
+  /** Where trains from the stop go, the soonest first, each with its next trains. */
+  directions: { towards: string; trains: { minutes: number; at: string }[] }[];
 }
 
 export interface VelibStation {
@@ -84,6 +99,36 @@ export interface VelibStation {
 export interface VelibReport {
   updatedAt: string;
   stations: VelibStation[];
+}
+
+/** The pollen counted in Europe, from Copernicus through Open-Meteo. */
+export type PollenKind =
+  | "alder"
+  | "birch"
+  | "grass"
+  | "mugwort"
+  | "olive"
+  | "ragweed";
+
+/** One town on the Île-de-France map, now. */
+export interface TownNow {
+  name: string;
+  lat: number;
+  lon: number;
+  temp: number;
+  humidity: number;
+  windKmh: number;
+  /** Where the wind blows from, in degrees: 0 is north, 90 east. */
+  windFrom: number;
+  /** The European Air Quality Index, or null when it could not be read. */
+  aqi: number | null;
+  /** The most of any one pollen, in grains per m³, and which; null when it could not be read. */
+  pollen: { grains: number; kind: PollenKind } | null;
+}
+
+export interface RegionReport {
+  updatedAt: string;
+  towns: TownNow[];
 }
 
 export interface Photo {
@@ -104,7 +149,25 @@ export interface Place {
   dish: string;
   lat: number;
   lon: number;
+  /** The restaurant on Google Maps; null for places added before, from an address. */
+  mapsUrl: string | null;
   photos: Photo[];
+}
+
+/** A restaurant Google Maps offers as the admin types its name. */
+export interface Suggestion {
+  placeId: string;
+  name: string;
+  address: string;
+}
+
+/** The restaurant the admin picked, before it is added. */
+export interface PickedPlace {
+  placeId: string;
+  name: string;
+  address: string;
+  /** The cuisine Google's type points to, to start the menu on. */
+  cuisine: string | null;
 }
 
 export interface Me {

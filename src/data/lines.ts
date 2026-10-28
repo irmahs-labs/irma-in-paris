@@ -1,262 +1,91 @@
 /**
- * The lines the transport screen offers, with their stops in order from the
- * first terminus to the other, and the lines whose status the live feed
- * shows. The ids are Île-de-France Mobilités' own (`line:IDFM:C01371`), as
- * PRIM knows them; the colours are each line's, with the ink that reads on it.
+ * Every metro, RER and Transilien line, in the order the screen lists them.
+ * PRIM gives each line's id and colours when it answers; these colours are
+ * the network's own, for when it does not.
  */
-export interface MetroLine {
-  id: string;
-  prim: string;
-  colour: string;
-  ink: string;
-  stops: readonly string[];
-}
+export type Mode = "metro" | "rer" | "transilien";
 
-/** Never empty: the screen opens on the first. */
-export const METRO_LINES: readonly [MetroLine, ...MetroLine[]] = [
-  {
-    colour: "#ffcd00",
-    id: "1",
-    ink: "#2f3b34",
-    prim: "line:IDFM:C01371",
-    stops: [
-      "La Défense",
-      "Esplanade de la Défense",
-      "Pont de Neuilly",
-      "Les Sablons",
-      "Porte Maillot",
-      "Argentine",
-      "Charles de Gaulle – Étoile",
-      "George V",
-      "Franklin D. Roosevelt",
-      "Champs-Élysées – Clemenceau",
-      "Concorde",
-      "Tuileries",
-      "Palais Royal – Musée du Louvre",
-      "Louvre – Rivoli",
-      "Châtelet",
-      "Hôtel de Ville",
-      "Saint-Paul",
-      "Bastille",
-      "Gare de Lyon",
-      "Reuilly – Diderot",
-      "Nation",
-      "Porte de Vincennes",
-      "Saint-Mandé",
-      "Bérault",
-      "Château de Vincennes",
-    ],
-  },
-  {
-    colour: "#c04191",
-    id: "4",
-    ink: "#ffffff",
-    prim: "line:IDFM:C01374",
-    stops: [
-      "Porte de Clignancourt",
-      "Simplon",
-      "Marcadet – Poissonniers",
-      "Château Rouge",
-      "Barbès – Rochechouart",
-      "Gare du Nord",
-      "Gare de l'Est",
-      "Château d'Eau",
-      "Strasbourg – Saint-Denis",
-      "Réaumur – Sébastopol",
-      "Étienne Marcel",
-      "Les Halles",
-      "Châtelet",
-      "Cité",
-      "Saint-Michel",
-      "Odéon",
-      "Saint-Germain-des-Prés",
-      "Saint-Sulpice",
-      "Saint-Placide",
-      "Montparnasse – Bienvenüe",
-      "Vavin",
-      "Raspail",
-      "Denfert-Rochereau",
-      "Mouton-Duvernet",
-      "Alésia",
-      "Porte d'Orléans",
-      "Mairie de Montrouge",
-      "Barbara",
-      "Bagneux – Lucie Aubrac",
-    ],
-  },
-  {
-    colour: "#6eca97",
-    id: "6",
-    ink: "#2f3b34",
-    prim: "line:IDFM:C01376",
-    stops: [
-      "Charles de Gaulle – Étoile",
-      "Kléber",
-      "Boissière",
-      "Trocadéro",
-      "Passy",
-      "Bir-Hakeim",
-      "Dupleix",
-      "La Motte-Picquet – Grenelle",
-      "Cambronne",
-      "Sèvres – Lecourbe",
-      "Pasteur",
-      "Montparnasse – Bienvenüe",
-      "Edgar Quinet",
-      "Raspail",
-      "Denfert-Rochereau",
-      "Saint-Jacques",
-      "Glacière",
-      "Corvisart",
-      "Place d'Italie",
-      "Nationale",
-      "Chevaleret",
-      "Quai de la Gare",
-      "Bercy",
-      "Dugommier",
-      "Daumesnil",
-      "Bel-Air",
-      "Picpus",
-      "Nation",
-    ],
-  },
-  {
-    colour: "#d5c900",
-    id: "9",
-    ink: "#2f3b34",
-    prim: "line:IDFM:C01379",
-    stops: [
-      "Pont de Sèvres",
-      "Billancourt",
-      "Marcel Sembat",
-      "Porte de Saint-Cloud",
-      "Exelmans",
-      "Michel-Ange – Molitor",
-      "Michel-Ange – Auteuil",
-      "Jasmin",
-      "Ranelagh",
-      "La Muette",
-      "Rue de la Pompe",
-      "Trocadéro",
-      "Iéna",
-      "Alma – Marceau",
-      "Franklin D. Roosevelt",
-      "Saint-Philippe du Roule",
-      "Miromesnil",
-      "Saint-Augustin",
-      "Havre – Caumartin",
-      "Chaussée d'Antin – La Fayette",
-      "Richelieu – Drouot",
-      "Grands Boulevards",
-      "Bonne Nouvelle",
-      "Strasbourg – Saint-Denis",
-      "République",
-      "Oberkampf",
-      "Saint-Ambroise",
-      "Voltaire",
-      "Charonne",
-      "Rue des Boulets",
-      "Nation",
-      "Buzenval",
-      "Maraîchers",
-      "Porte de Montreuil",
-      "Robespierre",
-      "Croix de Chavaux",
-      "Mairie de Montreuil",
-    ],
-  },
-  {
-    colour: "#62259d",
-    id: "14",
-    ink: "#ffffff",
-    prim: "line:IDFM:C01384",
-    stops: [
-      "Saint-Denis – Pleyel",
-      "Mairie de Saint-Ouen",
-      "Saint-Ouen",
-      "Porte de Clichy",
-      "Pont Cardinet",
-      "Saint-Lazare",
-      "Madeleine",
-      "Pyramides",
-      "Châtelet",
-      "Gare de Lyon",
-      "Bercy",
-      "Cour Saint-Émilion",
-      "Bibliothèque François Mitterrand",
-      "Olympiades",
-      "Maison Blanche",
-      "Hôpital Bicêtre",
-      "Villejuif – Gustave Roussy",
-      "L'Haÿ-les-Roses",
-      "Chevilly-Larue",
-      "Thiais – Orly",
-      "Aéroport d'Orly",
-    ],
-  },
-];
-
-export type Mode = "metro" | "rer" | "tram";
-
-export interface FeedLine {
-  id: string;
-  prim: string;
+export interface TransitLine {
+  /** "metro:3B", "rer:A", "transilien:H": a line's id in this app. */
+  key: string;
   mode: Mode;
+  /** As riders know it: "1", "3B", "A", "H". */
+  code: string;
   title: string;
   colour: string;
+  /** The text colour that reads on `colour`. */
   ink: string;
 }
 
-const metro = (line: MetroLine): FeedLine => ({
-  colour: line.colour,
-  id: line.id,
-  ink: line.ink,
-  mode: "metro",
-  prim: line.prim,
-  title: `Metro ${line.id}`,
+const DARK = "#000000";
+const LIGHT = "#ffffff";
+
+const MODE_NAMES: Record<Mode, string> = {
+  metro: "Metro",
+  rer: "RER",
+  transilien: "Transilien",
+};
+
+export const MODES: readonly Mode[] = ["metro", "rer", "transilien"];
+
+export const modeName = (mode: Mode) => MODE_NAMES[mode];
+
+/** "3B" → "3bis", as the signs write it. */
+export const shownCode = (code: string) =>
+  code.replace(/^(?<number>\d+)B$/iu, "$<number>bis");
+
+export const lineOf = (
+  mode: Mode,
+  code: string,
+  colour: string,
+  ink: string
+): TransitLine => ({
+  code,
+  colour,
+  ink,
+  key: `${mode}:${code}`,
+  mode,
+  title: `${modeName(mode)} ${shownCode(code)}`,
 });
 
-/** The lines the live feed shows the status of, in this order. */
-export const FEED_LINES: readonly FeedLine[] = [
-  ...METRO_LINES.map(metro),
-  {
-    colour: "#e3051c",
-    id: "A",
-    ink: "#ffffff",
-    mode: "rer",
-    prim: "line:IDFM:C01742",
-    title: "RER A",
-  },
-  {
-    colour: "#5291ce",
-    id: "B",
-    ink: "#ffffff",
-    mode: "rer",
-    prim: "line:IDFM:C01743",
-    title: "RER B",
-  },
-  {
-    colour: "#cf009e",
-    id: "T2",
-    ink: "#ffffff",
-    mode: "tram",
-    prim: "line:IDFM:C01390",
-    title: "Tram T2",
-  },
+export const LINES: readonly TransitLine[] = [
+  lineOf("metro", "1", "#ffcd00", DARK),
+  lineOf("metro", "2", "#003ca6", LIGHT),
+  lineOf("metro", "3", "#837902", LIGHT),
+  lineOf("metro", "3B", "#6ec4e8", DARK),
+  lineOf("metro", "4", "#cf009e", LIGHT),
+  lineOf("metro", "5", "#ff7e2e", DARK),
+  lineOf("metro", "6", "#6eca97", DARK),
+  lineOf("metro", "7", "#fa9aba", DARK),
+  lineOf("metro", "7B", "#6eca97", DARK),
+  lineOf("metro", "8", "#e19bdf", DARK),
+  lineOf("metro", "9", "#b6bd00", DARK),
+  lineOf("metro", "10", "#c9910d", DARK),
+  lineOf("metro", "11", "#704b1c", LIGHT),
+  lineOf("metro", "12", "#007852", LIGHT),
+  lineOf("metro", "13", "#6ec4e8", DARK),
+  lineOf("metro", "14", "#62259d", LIGHT),
+  lineOf("rer", "A", "#e3051c", LIGHT),
+  lineOf("rer", "B", "#5291ce", LIGHT),
+  lineOf("rer", "C", "#ffce00", DARK),
+  lineOf("rer", "D", "#00814f", LIGHT),
+  lineOf("rer", "E", "#c04191", LIGHT),
+  lineOf("transilien", "H", "#8d5e2a", LIGHT),
+  lineOf("transilien", "J", "#d5c900", DARK),
+  lineOf("transilien", "K", "#9a9940", LIGHT),
+  lineOf("transilien", "L", "#ceadd2", DARK),
+  lineOf("transilien", "N", "#00a88f", LIGHT),
+  lineOf("transilien", "P", "#f28e42", DARK),
+  lineOf("transilien", "R", "#f59ebe", DARK),
+  lineOf("transilien", "U", "#b90845", LIGHT),
 ];
 
-/** Direction 0 runs towards the last stop in the list, 1 towards the first. */
-export type Direction = 0 | 1;
+/** A code's leading number: "3B" → 3, "14" → 14, "A" → NaN. */
+const numberOf = (code: string) =>
+  Number(code.match(/^\d+/u)?.[0] ?? Number.NaN);
 
-export const terminusOf = (line: MetroLine, direction: Direction): string =>
-  (direction === 0 ? line.stops.at(-1) : line.stops[0]) ?? "";
-
-/** The stops a train can be boarded at going that way: all but its terminus. */
-export const boardableStops = (
-  line: MetroLine,
-  direction: Direction
-): readonly string[] => {
-  const ordered = direction === 0 ? line.stops : [...line.stops].toReversed();
-
-  return ordered.slice(0, -1);
-};
+/** Metro lines by number, then 3bis after 3 and 7bis after 7; letters A to Z. */
+export const lineOrder = (a: TransitLine, b: TransitLine) =>
+  MODES.indexOf(a.mode) - MODES.indexOf(b.mode) ||
+  numberOf(a.code) - numberOf(b.code) ||
+  a.code.localeCompare(b.code);

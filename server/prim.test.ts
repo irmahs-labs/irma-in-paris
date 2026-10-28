@@ -1,206 +1,329 @@
 import { describe, expect, it } from "vitest";
 import type * as z from "zod/mini";
 
-import { METRO_LINES } from "../src/data/lines";
-import type { FeedLine } from "../src/data/lines";
+import { lineOf } from "../src/data/lines";
 import {
   departuresAnswer,
+  describe as describeDisruption,
   lineReportsAnswer,
-  matchStops,
-  normalise,
-  sameStop,
+  linesAnswer,
   stopAreasAnswer,
   toDepartures,
-  toLineStatus,
+  toLines,
+  toStatuses,
+  toStops,
 } from "./prim";
+import type { PrimLine } from "./prim";
 
-const [LINE_1] = METRO_LINES;
-
-const FEED_1: FeedLine = {
-  colour: "#ffcd00",
-  id: "1",
-  ink: "#2f3b34",
-  mode: "metro",
+const METRO_1: PrimLine = {
+  ...lineOf("metro", "1", "#ffcd00", "#000000"),
   prim: "line:IDFM:C01371",
-  title: "Metro 1",
 };
 
-const departure = (time: string, direction: string, id: string) => ({
-  display_informations: { direction },
-  route: { direction: { id, name: direction } },
-  stop_date_time: { departure_date_time: time },
-});
+const METRO_4: PrimLine = {
+  ...lineOf("metro", "4", "#cf009e", "#ffffff"),
+  prim: "line:IDFM:C01374",
+};
 
-const report = (
-  disruptions: z.input<typeof lineReportsAnswer>["disruptions"]
-) => lineReportsAnswer.parse({ disruptions });
+const NOW = new Date("2026-10-28T13:30:00Z");
 
-const works = (begin: string) => ({
+const report = (answer: z.input<typeof lineReportsAnswer>) =>
+  lineReportsAnswer.parse(answer);
+
+const works = (id: string, begin: string) => ({
   application_periods: [{ begin, end: "20261110T050000" }],
   cause: "travaux",
-  messages: [{ text: "Travaux" }],
+  id,
+  impacted_objects: [
+    {
+      impacted_section: {
+        from: { name: "La Défense (Grande Arche)" },
+        to: { name: "Nanterre-Préfecture" },
+      },
+      pt_object: { embedded_type: "line", id: "line:IDFM:C01371" },
+    },
+  ],
   severity: { effect: "NO_SERVICE" },
   status: "future",
 });
 
-describe("stop names", () => {
-  it("compare without accents, case or punctuation", () => {
-    expect(normalise("Charles de Gaulle – Étoile")).toBe(
-      "charles de gaulle etoile"
-    );
-    expect(
-      sameStop("Charles de Gaulle - Etoile", "Charles de Gaulle – Étoile")
-    ).toBe(true);
-    expect(sameStop("La Défense (Grande Arche)", "La Défense")).toBe(true);
-    expect(sameStop("Saint-Paul (Le Marais)", "Saint-Paul")).toBe(true);
-    expect(sameStop("Concorde", "Bastille")).toBe(false);
-  });
+const departure = (time: string, direction: string) => ({
+  display_informations: { direction },
+  stop_date_time: { departure_date_time: time },
 });
 
-describe("matchStops", () => {
-  it("finds each of the line's stops among PRIM's, the exact name first", () => {
-    const ids = matchStops(
-      LINE_1,
-      stopAreasAnswer.parse({
-        stop_areas: [
-          { id: "stop_area:IDFM:71517", name: "La Défense (Grande Arche)" },
-          { id: "stop_area:IDFM:73794", name: "Esplanade de la Défense" },
-          { id: "stop_area:IDFM:71264", name: "Châtelet" },
-          { id: "stop_area:IDFM:99999", name: "Châtelet - Les Halles" },
+describe("toLines", () => {
+  it("keeps each mode's own lines, in order, with PRIM's colours", () => {
+    const lines = toLines(
+      "metro",
+      linesAnswer.parse({
+        lines: [
+          {
+            code: "14",
+            color: "62259D",
+            id: "line:IDFM:C01384",
+            text_color: "FFFFFF",
+          },
+          {
+            code: "3B",
+            color: "6EC4E8",
+            id: "line:IDFM:C01386",
+            text_color: "000000",
+          },
+          { code: "1", id: "line:IDFM:C01371" },
+          { code: "ORLYVAL", id: "line:IDFM:C01388" },
+          {
+            code: "3",
+            color: "837902",
+            id: "line:IDFM:C01373",
+            text_color: "FFFFFF",
+          },
         ],
       })
     );
 
-    expect(ids.get("La Défense")).toBe("stop_area:IDFM:71517");
-    expect(ids.get("Châtelet")).toBe("stop_area:IDFM:71264");
-    expect(ids.has("Bastille")).toBe(false);
+    expect(lines.map((line) => line.code)).toEqual(["1", "3", "3B", "14"]);
+    expect(lines[0]).toMatchObject({
+      colour: "#ffcd00",
+      key: "metro:1",
+      prim: "line:IDFM:C01371",
+    });
+    expect(lines[3]).toMatchObject({
+      colour: "#62259d",
+      ink: "#ffffff",
+      title: "Metro 14",
+    });
+  });
+
+  it("keeps trams and TER out of RER and Transilien", () => {
+    const answer = linesAnswer.parse({
+      lines: [
+        { code: "A", id: "a" },
+        { code: "T2", id: "t2" },
+        { code: "V", id: "v" },
+        { code: "TER", id: "ter" },
+      ],
+    });
+
+    expect(toLines("rer", answer).map((line) => line.code)).toEqual(["A"]);
+    expect(toLines("transilien", answer).map((line) => line.code)).toEqual([
+      "V",
+    ]);
+  });
+});
+
+describe("toStops", () => {
+  it("lists a line's stops alphabetically, accents and all", () => {
+    const stops = toStops(
+      stopAreasAnswer.parse({
+        stop_areas: [
+          { id: "3", name: "Saint-Paul" },
+          { id: "1", name: "Étoile" },
+          { id: "2", name: "Bastille" },
+        ],
+      })
+    );
+
+    expect(stops.map((stop) => stop.name)).toEqual([
+      "Bastille",
+      "Étoile",
+      "Saint-Paul",
+    ]);
   });
 });
 
 describe("toDepartures", () => {
-  it("keeps the trains towards the terminus, minutes counted from PRIM's now", () => {
+  it("groups the next trains by where they go, soonest first, minutes from PRIM's now", () => {
     const answer = departuresAnswer.parse({
       context: { current_datetime: "20261028T143000" },
       departures: [
-        departure(
-          "20261028T143130",
-          "Château de Vincennes",
-          "stop_area:vincennes"
-        ),
-        departure(
-          "20261028T143200",
-          "La Défense (Grande Arche)",
-          "stop_area:defense"
-        ),
-        departure(
-          "20261028T143600",
-          "Château de Vincennes",
-          "stop_area:vincennes"
-        ),
-        departure(
-          "20261028T144100",
-          "Château de Vincennes",
-          "stop_area:vincennes"
-        ),
-        departure(
-          "20261028T144900",
-          "Château de Vincennes",
-          "stop_area:vincennes"
-        ),
+        departure("20261028T143600", "Château de Vincennes (Vincennes)"),
+        departure("20261028T143130", "Château de Vincennes (Vincennes)"),
+        departure("20261028T143200", "La Défense (Grande Arche) (Puteaux)"),
+        departure("20261028T144100", "Château de Vincennes (Vincennes)"),
+        departure("20261028T144900", "Château de Vincennes (Vincennes)"),
       ],
     });
 
-    expect(
-      toDepartures(answer, {
-        id: "stop_area:vincennes",
-        name: "Château de Vincennes",
-      })
-    ).toEqual({
-      trains: [
-        { at: "14:31", minutes: 1 },
-        { at: "14:36", minutes: 6 },
-        { at: "14:41", minutes: 11 },
+    expect(toDepartures(answer)).toEqual({
+      directions: [
+        {
+          towards: "Château de Vincennes",
+          trains: [
+            { at: "14:31", minutes: 1 },
+            { at: "14:36", minutes: 6 },
+            { at: "14:41", minutes: 11 },
+          ],
+        },
+        {
+          towards: "La Défense (Grande Arche)",
+          trains: [{ at: "14:32", minutes: 2 }],
+        },
       ],
     });
   });
 
-  it("falls back on the direction's name when PRIM gives no stop area", () => {
+  it("counts across midnight", () => {
     const answer = departuresAnswer.parse({
       context: { current_datetime: "20261028T235800" },
-      departures: [
-        {
-          display_informations: { direction: "La Défense (Grande Arche)" },
-          stop_date_time: { departure_date_time: "20261029T000300" },
-        },
-        {
-          display_informations: { direction: "Château de Vincennes" },
-          stop_date_time: { departure_date_time: "20261029T000100" },
-        },
-      ],
+      departures: [departure("20261029T000300", "Saint-Germain-en-Laye")],
     });
 
-    expect(
-      toDepartures(answer, { id: undefined, name: "La Défense" }).trains
-    ).toEqual([{ at: "00:03", minutes: 5 }]);
+    expect(toDepartures(answer).directions[0]?.trains).toEqual([
+      { at: "00:03", minutes: 5 },
+    ]);
   });
 });
 
-describe("toLineStatus", () => {
-  const NOW = new Date("2026-10-28T13:30:00Z");
-
-  it("says traffic is normal with nothing that changes journeys", () => {
-    const status = toLineStatus(
-      FEED_1,
-      report([
-        {
-          messages: [{ text: "Ascenseur hors service" }],
-          severity: { effect: "OTHER_EFFECT" },
-          status: "active",
-        },
-      ]),
+describe("toStatuses", () => {
+  it("says traffic is normal on a line with nothing that changes journeys", () => {
+    const statuses = toStatuses(
+      [METRO_1, METRO_4],
+      report({
+        disruptions: [
+          {
+            id: "lift",
+            severity: { effect: "OTHER_EFFECT" },
+            status: "active",
+          },
+        ],
+        line_reports: [
+          {
+            line: {
+              id: "line:IDFM:C01371",
+              links: [{ id: "lift", type: "disruption" }],
+            },
+          },
+        ],
+      }),
       NOW
     );
 
-    expect(status).toEqual({
-      detail: "Traffic normal on the whole line",
-      id: "1",
-      level: "ok",
-    });
+    expect(statuses).toEqual([
+      {
+        detail: "Traffic normal on the whole line",
+        key: "metro:1",
+        level: "ok",
+      },
+      {
+        detail: "Traffic normal on the whole line",
+        key: "metro:4",
+        level: "ok",
+      },
+    ]);
   });
 
-  it("shows an active disruption's title, without its HTML", () => {
-    const status = toLineStatus(
-      FEED_1,
-      report([
-        {
-          cause: "perturbation",
-          messages: [
-            { channel: { types: ["web"] }, text: "<p>Long text</p>" },
-            {
-              channel: { types: ["title"] },
-              text: "Ralentissements&nbsp;: <b>incident voyageur</b> &amp;quot;",
+  it("leaves out a lift out of order at a station, whatever effect PRIM gives it", () => {
+    const statuses = toStatuses(
+      [METRO_1],
+      report({
+        disruptions: [
+          {
+            cause: "perturbation",
+            id: "lift",
+            impacted_objects: [
+              {
+                pt_object: {
+                  embedded_type: "stop_area",
+                  id: "stop_area:IDFM:71264",
+                },
+              },
+            ],
+            messages: [{ text: "Panne d'un ascenseur" }],
+            severity: { effect: "REDUCED_SERVICE" },
+            status: "active",
+          },
+          {
+            cause: "perturbation",
+            id: "lift-on-line",
+            impacted_objects: [
+              { pt_object: { embedded_type: "line", id: "line:IDFM:C01371" } },
+            ],
+            messages: [{ text: "Panne d'un ascenseur" }],
+            severity: { effect: "REDUCED_SERVICE" },
+            status: "active",
+          },
+        ],
+        line_reports: [
+          {
+            line: {
+              id: "line:IDFM:C01371",
+              links: [
+                { id: "lift", type: "disruption" },
+                { id: "lift-on-line", type: "disruption" },
+              ],
             },
-          ],
-          severity: { effect: "SIGNIFICANT_DELAYS" },
-          status: "active",
-        },
-      ]),
+          },
+        ],
+      }),
       NOW
     );
 
-    expect(status).toEqual({
-      detail: "Ralentissements : incident voyageur &quot;",
-      id: "1",
+    expect(statuses[0]?.level).toBe("ok");
+  });
+
+  it("describes an active disruption in English, from its effect and section", () => {
+    const [, line4] = toStatuses(
+      [METRO_1, METRO_4],
+      report({
+        disruptions: [
+          {
+            cause: "perturbation",
+            id: "slow",
+            impacted_objects: [
+              {
+                impacted_section: {
+                  from: { name: "Châtelet" },
+                  to: { name: "Montparnasse - Bienvenüe" },
+                },
+                pt_object: { embedded_type: "line", id: "line:IDFM:C01374" },
+              },
+            ],
+            severity: { effect: "SIGNIFICANT_DELAYS" },
+            status: "active",
+          },
+        ],
+      }),
+      NOW
+    );
+
+    expect(line4).toEqual({
+      detail: "Delays between Châtelet and Montparnasse - Bienvenüe",
+      key: "metro:4",
       level: "warn",
     });
   });
 
   it("calls works starting tonight works, and leaves out works next week", () => {
-    expect(
-      toLineStatus(FEED_1, report([works("20261028T223000")]), NOW).level
-    ).toBe("works");
-    expect(
-      toLineStatus(FEED_1, report([works("20261104T223000")]), NOW).level
-    ).toBe("ok");
+    const tonight = toStatuses(
+      [METRO_1],
+      report({ disruptions: [works("w", "20261028T223000")] }),
+      NOW
+    );
+
+    const later = toStatuses(
+      [METRO_1],
+      report({ disruptions: [works("w", "20261104T223000")] }),
+      NOW
+    );
+
+    expect(tonight[0]).toEqual({
+      detail:
+        "Works: No trains between La Défense and Nanterre-Préfecture from 22:30 today",
+      key: "metro:1",
+      level: "works",
+    });
+    expect(later[0]?.level).toBe("ok");
+  });
+});
+
+describe("describe", () => {
+  it("names the day of works that start another day", () => {
+    const item = report({ disruptions: [works("w", "20261029T223000")] })
+      .disruptions?.[0];
+
+    expect(item && describeDisruption(item, NOW)).toBe(
+      "Works: No trains between La Défense and Nanterre-Préfecture from Thu 29 Oct, 22:30"
+    );
   });
 });
