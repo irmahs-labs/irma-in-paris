@@ -1,14 +1,62 @@
-# The app on the server, reached by Caddy (irmahs-labs/proxy) on the shared
-# `proxy` network under its alias. Rename `app` in the alias to the repo's name,
-# and use that name in the Caddyfile block.
+# Local development: Postgres, dbmate to apply db/migrations to it, and
+# Garage, the S3 store the photos live in.
+#
+#   npm run db:up               start Postgres and apply pending migrations
+#   npm run db:new -- <name>    create db/migrations/<timestamp>_<name>.sql
+#   npm run db:reset            delete the local database and rebuild it
+#   npm run storage:up          start Garage, with its bucket and the app's key
+#
+# The credentials are for these local containers only; production has its
+# own (compose.prod.yaml). Postgres is on 5435, beside pantry-spinner's on
+# 5432, the account service's on 5433 and Mini Games' on 5434.
 services:
-  app:
-    build: .
-    restart: unless-stopped
-    networks:
-      proxy:
-        aliases: [app]
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: irma_in_paris
+      POSTGRES_PASSWORD: irma_in_paris
+      POSTGRES_DB: irma_in_paris
+    ports:
+      - "127.0.0.1:${DB_PORT-5435}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U irma_in_paris -d irma_in_paris"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
-networks:
-  proxy:
-    external: true
+  migrate:
+    image: ghcr.io/amacneil/dbmate:2
+    profiles: [tools]
+    environment:
+      DATABASE_URL: postgres://irma_in_paris:irma_in_paris@db:5432/irma_in_paris?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /db/migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db:/db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  garage:
+    image: dxflrs/garage:v2.4.1
+    environment:
+      # Local only, never used anywhere else.
+      GARAGE_RPC_SECRET: edd9f4d00e48386951a01b7fb8f74192e20e09c59d9c10b68189479290a1c592
+    ports:
+      - "127.0.0.1:3900:3900"
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  db_data:
+  garage_meta:
+  garage_data:

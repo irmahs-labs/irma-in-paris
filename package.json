@@ -1,26 +1,49 @@
 {
-  "name": "app",
+  "name": "irma-in-paris",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit",
+    "dev": "vite",
+    "dev:api": "tsx watch --env-file=.env server/main.ts",
+    "build": "tsc -b && vite build && npm run build:server",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "build:server": "esbuild server/main.ts --bundle --platform=node --format=esm --target=node22 --external:pg-native --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist-server/main.js",
+    "start": "node dist-server/main.js",
+    "db:up": "docker compose up -d --wait db && docker compose run --rm migrate up",
+    "db:new": "docker compose run --rm migrate new",
+    "db:reset": "docker compose down -v db && npm run db:up",
+    "storage:up": "docker compose up -d --wait garage && sh scripts/garage-init.sh"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.17",
+    "aws4fetch": "^1.0.20",
+    "hono": "^4.13.13",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "esbuild": "^0.28.2",
     "oxfmt": "^0.74.0",
     "oxlint": "^1.89.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "ultracite": "^8.0.2",
+    "vite": "^8.3.4",
     "vitest": "^5.0.5"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=22.18"
   }
 }

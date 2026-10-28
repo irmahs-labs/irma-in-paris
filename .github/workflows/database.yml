@@ -1,0 +1,54 @@
+# Checks db/migrations/ on every change: they apply to an empty database and
+# roll back cleanly, and the places queries work against what they build.
+# Applying them to production is the deploy's job, not this one's.
+name: Database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "db/**"
+      - "server/places*.ts"
+      - "server/db.ts"
+      - "compose.yaml"
+      - ".github/workflows/database.yml"
+  pull_request:
+    paths:
+      - "db/**"
+      - "server/places*.ts"
+      - "server/db.ts"
+      - "compose.yaml"
+      - ".github/workflows/database.yml"
+  workflow_dispatch:
+
+# Reads the repository and nothing else.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Migrations build, roll back, and serve the places
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Apply every migration to an empty database
+        run: npm run db:up
+
+      # Down then up again, so every migrate:down is known to work before it is
+      # ever needed.
+      - name: Roll everything back and apply it again
+        run: |
+          for _ in db/migrations/*.sql; do docker compose run --rm migrate rollback; done
+          docker compose run --rm migrate up
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+
+      - name: The places queries against the migrated database
+        run: npx vitest run server/places.test.ts
+        env:
+          TEST_DATABASE_URL: postgres://irma_in_paris:irma_in_paris@localhost:5435/irma_in_paris
