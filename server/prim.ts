@@ -221,14 +221,26 @@ const beginsSoon = (item: Disruption, now: Date) => {
   return starts - parisNow < 24 * 60 * 60 * 1000;
 };
 
-/** A message's text without its HTML, on one line. */
+/** The HTML entities PRIM's messages use, as characters. */
+const ENTITIES = new Map([
+  ["&#39;", "'"],
+  ["&amp;", "&"],
+  ["&apos;", "'"],
+  ["&nbsp;", " "],
+  ["&quot;", '"'],
+]);
+
+/**
+ * A message's text without its HTML, on one line. Entities are decoded in
+ * one pass, so "&amp;quot;" stays the text "&quot;".
+ */
 const plain = (text: string) =>
   text
     .replaceAll(/<[^>]*>/gu, " ")
-    .replaceAll("&nbsp;", " ")
-    .replaceAll("&amp;", "&")
-    .replaceAll(/&#39;|&apos;/gu, "'")
-    .replaceAll("&quot;", '"')
+    .replaceAll(
+      /&(?:#39|amp|apos|nbsp|quot);/gu,
+      (entity) => ENTITIES.get(entity) ?? entity
+    )
     .replaceAll(/\s+/gu, " ")
     .trim();
 

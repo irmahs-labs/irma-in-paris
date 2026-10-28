@@ -178,7 +178,7 @@ describe("toLineStatus", () => {
             { channel: { types: ["web"] }, text: "<p>Long text</p>" },
             {
               channel: { types: ["title"] },
-              text: "Ralentissements&nbsp;: <b>incident voyageur</b>",
+              text: "Ralentissements&nbsp;: <b>incident voyageur</b> &amp;quot;",
             },
           ],
           severity: { effect: "SIGNIFICANT_DELAYS" },
@@ -189,7 +189,7 @@ describe("toLineStatus", () => {
     );
 
     expect(status).toEqual({
-      detail: "Ralentissements : incident voyageur",
+      detail: "Ralentissements : incident voyageur &quot;",
       id: "1",
       level: "warn",
     });
