@@ -119,8 +119,8 @@ export interface Place {
   dish: string;
   lat: number;
   lon: number;
-  /** The restaurant on Google Maps. */
-  mapsUrl: string;
+  /** The restaurant on Google Maps; null for places added before, from an address. */
+  mapsUrl: string | null;
   photos: Photo[];
 }
 

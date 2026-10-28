@@ -513,10 +513,15 @@ export const PlacesScreen = () => {
                 <span className="selected__name">{place.name}</span>
                 <span>{place.address}</span>
                 <span>
-                  {place.cuisine} ·{" "}
-                  <a href={place.mapsUrl} target="_blank" rel="noreferrer">
-                    open in Google Maps
-                  </a>
+                  {place.cuisine}
+                  {place.mapsUrl ? (
+                    <>
+                      {" · "}
+                      <a href={place.mapsUrl} target="_blank" rel="noreferrer">
+                        open in Google Maps
+                      </a>
+                    </>
+                  ) : null}
                 </span>
                 {place.visitedOn || place.dish ? (
                   <span>

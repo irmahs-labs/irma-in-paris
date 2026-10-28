@@ -26,7 +26,7 @@ export interface NewPhoto {
 
 interface PlaceRow {
   id: string;
-  google_maps_url: string;
+  google_maps_url: string | null;
   name: string;
   cuisine: string;
   address: string;
