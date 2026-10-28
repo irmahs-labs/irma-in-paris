@@ -1,0 +1,96 @@
+# The server. Deploys run `docker compose -f compose.prod.yaml …`; locally,
+# plain `docker compose` uses compose.yaml.
+#
+# .env beside this file is written by the deploy from GitHub secrets: the
+# database password twice (as is for Postgres, and percent-encoded as
+# POSTGRES_PASSWORD_URL for the postgres:// URLs, where a / or @ would break
+# them), Garage's RPC secret, the app's S3 secret key and the PRIM key. The
+# database and Garage are reachable only on the internal network; Caddy
+# reaches the app on the shared `proxy` network as `irma-in-paris:3000`, and
+# the app reaches the account service there as `auth:3001`.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: irma_in_paris
+      # Read once, when the volume is first created. Changing the secret later
+      # does not change the database's password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: irma_in_paris
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U irma_in_paris -d irma_in_paris"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    networks: [internal]
+
+  migrate:
+    image: ghcr.io/amacneil/dbmate:2
+    profiles: [tools]
+    environment:
+      DATABASE_URL: postgres://irma_in_paris:${POSTGRES_PASSWORD_URL:?set in .env}@db:5432/irma_in_paris?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /db/migrations
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db:/db:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+
+  # The photos: one Garage node, one copy, its metadata and the files
+  # themselves in two volumes. scripts/garage-init.sh gives it its layout,
+  # the `photos` bucket and the app's key, on every deploy, doing only what
+  # is not done yet.
+  garage:
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?set in .env}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks: [internal]
+
+  app:
+    build: .
+    image: irma-in-paris
+    restart: unless-stopped
+    environment:
+      APP_URL: https://irma-in-paris.irmahs.dev
+      AUTH_INTERNAL_URL: http://auth:3001
+      DATABASE_URL: postgres://irma_in_paris:${POSTGRES_PASSWORD_URL:?set in .env}@db:5432/irma_in_paris
+      S3_ENDPOINT: http://garage:3900
+      S3_BUCKET: photos
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set in .env}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set in .env}
+      # Optional: without it the transport screen says live times are off.
+      PRIM_API_KEY: ${PRIM_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    networks:
+      internal:
+      proxy:
+        aliases: [irma-in-paris]
+
+networks:
+  internal:
+  proxy:
+    external: true
+
+volumes:
+  db_data:
+  garage_meta:
+  garage_data:

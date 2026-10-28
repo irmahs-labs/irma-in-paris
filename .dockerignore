@@ -4,4 +4,9 @@
 node_modules
 dist
 .env
+.env.*
 *.md
+dist-server
+db
+garage
+scripts

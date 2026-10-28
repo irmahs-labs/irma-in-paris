@@ -12,10 +12,11 @@ concurrency:
 
 jobs:
   # Lint and format, Type-check, Tests, Build and Docker build, shared by every
-  # irmahs-labs repo (irmahs-labs/workflows). Pass only what differs here, and add
-  # the app's own jobs (a database, a smoke test, browser tests) next to it.
+  # irmahs-labs repo (irmahs-labs/workflows); only what differs here is passed.
   app:
     uses: irmahs-labs/workflows/.github/workflows/app-ci.yml@main
+    with:
+      compose-check: docker compose -f compose.prod.yaml config --quiet --no-interpolate
 
   # The branch rules require a check named "checks". It fails if any job
   # above failed, was cancelled or skipped; list new jobs in needs.
