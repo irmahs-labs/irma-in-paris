@@ -55,6 +55,8 @@
   --body: "Nunito Sans", "Fredoka", system-ui, sans-serif;
 }
 :root[data-theme="dark"] {
+  /* MapLibre's zoom icons are dark; Dark Matcha's controls are a dark well. */
+  --map-icons: invert(1);
   /* Dark Matcha: a mid-tone matcha page, cards a step lighter, and the header,
      buttons and fields a darker well. Outlines and shadows stay near-black. */
   --ground: #46574b;
@@ -405,8 +407,10 @@ a:hover {
 
 /* ── fields ── */
 .field {
+  display: block;
   width: 100%;
-  min-height: 44px;
+  height: 44px;
+  margin: 0;
   padding: 0 12px;
   border: var(--stroke-base) solid var(--outline);
   border-radius: var(--radius-lg);
@@ -417,15 +421,28 @@ a:hover {
   color: var(--text-muted);
   opacity: 0.8;
 }
-/* iOS Safari sizes date and time fields to their contents, and centres
-   their value, unless their native look is taken off. */
+/* Browsers size date fields and menus to their contents, and iOS Safari
+   centres a date, unless their native look is taken off; the menu gets its
+   arrow back as a drawing in the text colour. */
 .field[type="date"],
-.field[type="time"] {
-  display: block;
+.field[type="time"],
+select.field {
   min-width: 0;
   -webkit-appearance: none;
   appearance: none;
+  line-height: 42px;
   text-align: left;
+}
+select.field {
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text) 50%),
+    linear-gradient(135deg, var(--text) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 19px,
+    calc(100% - 13px) 19px;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
 }
 .field::-webkit-date-and-time-value {
   text-align: left;
@@ -465,8 +482,8 @@ a:hover {
   background: var(--raised-hover);
 }
 .side__item[aria-current="page"] {
-  background: var(--strong);
-  color: var(--on-strong);
+  background: var(--selected);
+  color: var(--on-selected);
 }
 .side__item svg {
   flex: none;
@@ -500,61 +517,22 @@ a:hover {
   align-items: stretch;
 }
 
-/* ── windows: an app on the desk, with a dark title bar ── */
+/* ── panels: Cute Matcha's app panel, flat, its file name on the legend ── */
 .window {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  background: var(--accent);
-  color: var(--on-accent);
-  border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-hard);
+  margin-top: 12px;
 }
-.window__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 14px;
-  border-bottom: var(--stroke-base) solid var(--outline);
-  background-color: var(--strong);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 6px 6px;
-}
-.window__title {
+.legend {
   margin: 0;
-  font: 500 15px/1.2 var(--display);
-  color: var(--on-strong);
-}
-.window__dots {
-  display: flex;
-  gap: 6px;
-}
-.window__dots span {
-  width: 14px;
-  height: 14px;
-  border: var(--stroke-base) solid var(--outline);
-  border-radius: 50%;
-}
-.window__dots span:nth-child(1) {
-  background: var(--gold);
-}
-.window__dots span:nth-child(2) {
-  background: var(--moss);
-}
-.window__dots span:nth-child(3) {
-  background: var(--danger);
 }
 .window__body {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px;
+  padding: 28px 20px 20px;
 }
 .window--wide {
   flex: 2 1 600px;
@@ -569,13 +547,13 @@ a:hover {
   flex: 1 1 100%;
 }
 
-/* A tile inside a window: a card lying on the window's matcha. */
+/* An inset box inside a panel, a step back into the page's ground. */
 .tile {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 12px 14px;
-  background: var(--panel);
+  background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) solid var(--outline);
   border-radius: var(--radius-md);
@@ -617,7 +595,7 @@ a:hover {
 }
 .scale [data-on="true"] {
   box-shadow:
-    0 0 0 2px var(--panel),
+    0 0 0 2px var(--ground),
     0 0 0 3.5px var(--outline);
 }
 .meter {
@@ -636,7 +614,7 @@ a:hover {
 .notice {
   margin: 0;
   padding: 12px 14px;
-  background: var(--panel);
+  background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) dashed var(--outline);
   border-radius: var(--radius-md);
@@ -703,8 +681,7 @@ a:hover {
   align-items: flex-start;
 }
 .day--today {
-  background: var(--raised);
-  box-shadow: var(--shadow-soft);
+  border: var(--line);
 }
 .day__name {
   font: 600 16px/1.2 var(--display);
@@ -761,6 +738,10 @@ a:hover {
   font-size: 15px;
   line-height: 1.4;
 }
+.window__text--hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
 
 /* ── transport ── */
 .step {
@@ -775,7 +756,15 @@ a:hover {
 .lines {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+.lines__mode {
+  flex-basis: 100%;
+  font: 600 12px/1.2 var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 /* A line's own colour and ink, from the network's identity. */
 .badge {
@@ -796,21 +785,23 @@ a:hover {
   width: 40px;
   border-radius: 8px;
 }
-.badge--tram {
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
+.badge--transilien {
+  width: 40px;
+  border-radius: 12px;
 }
 .badge--pick {
-  width: 48px;
-  height: 48px;
-  font-size: 18px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 15px;
   opacity: 0.85;
 }
 .badge--pick[aria-pressed="true"] {
   opacity: 1;
   transform: translateY(-1px);
   box-shadow:
-    0 0 0 3px var(--ground),
+    0 0 0 3px var(--panel),
     0 0 0 5px var(--outline);
 }
 .badge--big {
@@ -841,8 +832,8 @@ a:hover {
   border-left: var(--line);
 }
 .segmented button[aria-pressed="true"] {
-  background: var(--strong);
-  color: var(--on-strong);
+  background: var(--selected);
+  color: var(--on-selected);
 }
 .segmented--fit button {
   flex: none;
@@ -877,8 +868,8 @@ a:hover {
 }
 .stop[aria-pressed="true"] {
   border-color: var(--outline);
-  background: var(--strong);
-  color: var(--on-strong);
+  background: var(--selected);
+  color: var(--on-selected);
   font-weight: 700;
 }
 .stop__dot {
@@ -894,9 +885,9 @@ a:hover {
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: var(--panel);
+  background: var(--ground);
   color: var(--text);
-  border: var(--line);
+  border: var(--stroke-base) solid var(--outline);
   border-radius: var(--radius-panel);
 }
 .result__head {
@@ -906,6 +897,15 @@ a:hover {
 }
 .result__stop {
   font: 600 18px/1.2 var(--display);
+}
+.direction {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.direction__name {
+  font-size: 14px;
+  font-weight: 700;
 }
 .trains {
   display: grid;
@@ -922,9 +922,8 @@ a:hover {
   border-radius: var(--radius-md);
 }
 .train:first-child {
-  background: var(--accent);
-  color: var(--on-accent);
-  box-shadow: var(--shadow-soft);
+  background: var(--selected);
+  color: var(--on-selected);
 }
 .train__min {
   font: 600 30px/1 var(--display);
@@ -934,7 +933,7 @@ a:hover {
 }
 .feed {
   overflow: hidden;
-  background: var(--panel);
+  background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) solid var(--outline);
   border-radius: var(--radius-md);
@@ -1000,44 +999,44 @@ a:hover {
   position: relative;
   flex: 3 1 380px;
   min-width: 0;
-  align-self: flex-start;
+  height: 420px;
   overflow: hidden;
-  background: var(--panel);
+  background: var(--ground);
   border: var(--stroke-base) solid var(--outline);
   border-radius: var(--radius-md);
 }
-.map > svg {
+/* Over maplibre-gl.css, which makes the map relative and so zero high. */
+.map .map__canvas {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
 }
-.map__river {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* MapLibre's own controls and credit, in the app's colours. */
+.map .maplibregl-ctrl-group {
+  overflow: hidden;
+  background: var(--raised);
+  border: var(--stroke-base) solid var(--outline);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
 }
-.map__river--edge {
-  stroke: var(--outline);
+.map .maplibregl-ctrl-group button + button {
+  border-top: var(--stroke-base) solid var(--outline);
 }
-.map__river--water {
-  stroke: var(--water);
+.map .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: var(--map-icons, none);
 }
-.map__label {
-  position: absolute;
-  left: 12px;
-  bottom: 10px;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
+.map .maplibregl-ctrl-attrib {
   background: var(--panel);
-  color: var(--text-muted);
-  font: 600 12px/1.2 var(--display);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  color: var(--text);
+  font: 400 11px/1.4 var(--body);
 }
+.map .maplibregl-ctrl-attrib a {
+  color: var(--text-muted);
+}
+.map .maplibregl-cooperative-gesture-screen {
+  font: 700 15px/1.4 var(--body);
+}
+/* A pin, placed by MapLibre at its point; the button sits on it. */
 .pin {
-  position: absolute;
-  transform: translate(-50%, -100%);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1059,8 +1058,10 @@ a:hover {
   background: var(--danger);
   color: var(--ink);
 }
-.pin[aria-pressed="true"] {
+.maplibregl-marker:has(.pin[aria-pressed="true"]) {
   z-index: 2;
+}
+.pin[aria-pressed="true"] {
   background: var(--strong);
   color: var(--on-strong);
   box-shadow: var(--shadow-hard);
@@ -1077,9 +1078,9 @@ a:hover {
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: var(--panel);
+  background: var(--ground);
   color: var(--text);
-  border: var(--line);
+  border: var(--stroke-base) solid var(--outline);
   border-radius: var(--radius-panel);
 }
 .card__name {
@@ -1167,8 +1168,8 @@ a:hover {
   background: var(--raised-hover);
 }
 .place-row[aria-pressed="true"] {
-  background: var(--strong);
-  color: var(--on-strong);
+  background: var(--selected);
+  color: var(--on-selected);
 }
 .place-row__num {
   flex: none;
@@ -1306,6 +1307,55 @@ a:hover {
   font-size: 13px;
   font-weight: 700;
 }
+/* Google Maps' restaurants by the name typed, to pick one. */
+.search {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.search__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--raised);
+  border: var(--stroke-base) solid var(--outline);
+  border-radius: var(--radius-lg);
+}
+.search__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.search__option:hover,
+.search__option:focus-visible {
+  background: var(--selected);
+  color: var(--on-selected);
+}
+.chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  background: var(--ground);
+  border: var(--stroke-base) solid var(--outline);
+  border-radius: var(--radius-md);
+}
+.chosen .tile__label {
+  flex-basis: 100%;
+}
 .file {
   display: flex;
   align-items: center;
@@ -1331,11 +1381,6 @@ a:hover {
   color: var(--text-muted);
 }
 
-@media (min-width: 901px) {
-  .map {
-    min-height: var(--map-min, 0);
-  }
-}
 @media (max-width: 900px) {
   .side {
     flex: 1 1 100%;
@@ -1372,6 +1417,10 @@ a:hover {
   }
   .tiles {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .map {
+    flex-basis: 100%;
+    height: 320px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

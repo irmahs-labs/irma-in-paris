@@ -4,7 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp } from "./app";
 import { connect } from "./db";
 import { env } from "./env";
-import { geocode } from "./geocode";
+import { createGooglePlaces } from "./google-places";
 import {
   addPhoto,
   addPlace,
@@ -21,13 +21,20 @@ import { fetchWeather } from "./weather";
 
 const pool = connect(env.databaseUrl);
 
+if (!env.googleMapsApiKey) {
+  console.warn("GOOGLE_MAPS_API_KEY is not set: places cannot be added");
+}
+
 if (!env.primApiKey) {
   console.warn("PRIM_API_KEY is not set: live transport times are off");
 }
 
 const app = createApp({
   appOrigin: env.appOrigin,
-  geocode: geocode(),
+  google: env.googleMapsApiKey
+    ? createGooglePlaces({ apiKey: env.googleMapsApiKey })
+    : null,
+  mapFile: env.mapFile,
   places: {
     add: (place) => addPlace(pool, place),
     addPhoto: (photo) => addPhoto(pool, photo),

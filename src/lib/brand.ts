@@ -3,4 +3,4 @@
  * where vite.config.ts writes it into index.html at build time. Renaming the
  * app is this one line.
  */
-export const APP_NAME = "Paris Live";
+export const APP_NAME = "Irma in Paris";

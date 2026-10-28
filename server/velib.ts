@@ -40,8 +40,8 @@ export const statusAnswer = z.object({
 });
 
 /** How many columns and rows the map is cut into: one station shows in each. */
-const COLUMNS = 4;
-const ROWS = 3;
+const COLUMNS = 5;
+const ROWS = 4;
 
 /**
  * One open station per cell of a grid over the box, the one nearest the

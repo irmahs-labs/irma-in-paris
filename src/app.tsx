@@ -23,7 +23,7 @@ const SECTIONS: readonly Section[] = [
     Screen: WeatherScreen,
     hint: "Now and the next 7 days",
     icon: "weather",
-    name: "météo",
+    name: "weather",
     path: "/",
   },
   {

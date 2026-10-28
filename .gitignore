@@ -7,3 +7,4 @@ tsconfig.tsbuildinfo
 .env.*
 dist-server
 !.env.example
+maps
