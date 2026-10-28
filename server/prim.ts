@@ -237,6 +237,7 @@ const disruption = z.object({
       })
     )
   ),
+  messages: z.optional(z.array(z.object({ text: z.string() }))),
   severity: z.optional(z.object({ effect: z.optional(z.string()) })),
   status: z.optional(z.string()),
   tags: z.optional(z.array(z.string())),
@@ -340,7 +341,29 @@ const beginsSoon = (item: Disruption, now: Date) => {
   );
 };
 
+/**
+ * Whether it is about the line itself, all of it or a section between two
+ * stations, rather than one station: a lift out of order at a station is
+ * on every line that stops there, and changes no journey on any of them.
+ */
+const affectsLine = (item: Disruption) =>
+  (item.impacted_objects ?? []).some(
+    (object) => object.pt_object?.embedded_type === "line"
+  );
+
+/** Lifts and escalators, which PRIM files under the lines whose stations have them. */
+const LIFTS = /ascenseur|escalator|escalier m[ée]canique|elevator|\blift\b/iu;
+
+const isAboutLifts = (item: Disruption) =>
+  [
+    item.cause ?? "",
+    ...(item.tags ?? []),
+    ...(item.messages ?? []).map((message) => message.text),
+  ].some((text) => LIFTS.test(text));
+
 const matters = (item: Disruption, now: Date) =>
+  affectsLine(item) &&
+  !isAboutLifts(item) &&
   (EFFECTS.has(item.severity?.effect ?? "") || isWorks(item)) &&
   (item.status === "active" ||
     (item.status === "future" && isWorks(item) && beginsSoon(item, now)));

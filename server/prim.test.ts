@@ -213,6 +213,55 @@ describe("toStatuses", () => {
     ]);
   });
 
+  it("leaves out a lift out of order at a station, whatever effect PRIM gives it", () => {
+    const statuses = toStatuses(
+      [METRO_1],
+      report({
+        disruptions: [
+          {
+            cause: "perturbation",
+            id: "lift",
+            impacted_objects: [
+              {
+                pt_object: {
+                  embedded_type: "stop_area",
+                  id: "stop_area:IDFM:71264",
+                },
+              },
+            ],
+            messages: [{ text: "Panne d'un ascenseur" }],
+            severity: { effect: "REDUCED_SERVICE" },
+            status: "active",
+          },
+          {
+            cause: "perturbation",
+            id: "lift-on-line",
+            impacted_objects: [
+              { pt_object: { embedded_type: "line", id: "line:IDFM:C01371" } },
+            ],
+            messages: [{ text: "Panne d'un ascenseur" }],
+            severity: { effect: "REDUCED_SERVICE" },
+            status: "active",
+          },
+        ],
+        line_reports: [
+          {
+            line: {
+              id: "line:IDFM:C01371",
+              links: [
+                { id: "lift", type: "disruption" },
+                { id: "lift-on-line", type: "disruption" },
+              ],
+            },
+          },
+        ],
+      }),
+      NOW
+    );
+
+    expect(statuses[0]?.level).toBe("ok");
+  });
+
   it("describes an active disruption in English, from its effect and section", () => {
     const [, line4] = toStatuses(
       [METRO_1, METRO_4],
