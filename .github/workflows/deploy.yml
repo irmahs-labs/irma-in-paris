@@ -29,6 +29,8 @@ jobs:
           S3_SECRET_ACCESS_KEY: ${{ secrets.IRMA_IN_PARIS_S3_SECRET_KEY }}
           # Optional: without it the transport screen says live times are off.
           PRIM_API_KEY: ${{ secrets.PRIM_API_KEY }}
+          # Optional: without it no restaurant can be added.
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           for name in POSTGRES_PASSWORD GARAGE_RPC_SECRET S3_SECRET_ACCESS_KEY; do
             [ -n "${!name}" ] || { echo "The secret behind $name is not set (see README.md)"; exit 1; }
@@ -37,8 +39,8 @@ jobs:
           # otherwise break them, and a parser's error can print part of it.
           POSTGRES_PASSWORD_URL=$(python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["POSTGRES_PASSWORD"], safe=""))')
           # .env is sent over stdin so the secrets never appear in a command line
-          printf 'POSTGRES_PASSWORD=%s\nPOSTGRES_PASSWORD_URL=%s\nGARAGE_RPC_SECRET=%s\nS3_ACCESS_KEY_ID=%s\nS3_SECRET_ACCESS_KEY=%s\nPRIM_API_KEY=%s\n' \
-            "$POSTGRES_PASSWORD" "$POSTGRES_PASSWORD_URL" "$GARAGE_RPC_SECRET" "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY" "$PRIM_API_KEY" |
+          printf 'POSTGRES_PASSWORD=%s\nPOSTGRES_PASSWORD_URL=%s\nGARAGE_RPC_SECRET=%s\nS3_ACCESS_KEY_ID=%s\nS3_SECRET_ACCESS_KEY=%s\nPRIM_API_KEY=%s\nGOOGLE_MAPS_API_KEY=%s\n' \
+            "$POSTGRES_PASSWORD" "$POSTGRES_PASSWORD_URL" "$GARAGE_RPC_SECRET" "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY" "$PRIM_API_KEY" "$GOOGLE_MAPS_API_KEY" |
           ssh deploy@${{ secrets.DEPLOY_HOST }} 'set -e
             cd /srv/irma-in-paris
             [ -d .git ] || git clone https://github.com/${{ github.repository }}.git .
@@ -48,6 +50,7 @@ jobs:
             export COMPOSE_FILE=compose.prod.yaml
             docker compose up -d --wait db garage
             sh scripts/garage-init.sh
+            sh scripts/map-fetch.sh
             # The new app is built before the schema changes, so the old one
             # meets the new schema only while the containers swap.
             docker compose build app

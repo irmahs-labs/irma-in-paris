@@ -21,7 +21,7 @@ export type WhoIs = (cookie: string | undefined) => Promise<Visitor>;
  * The app whose list in the account service's APP_ACCESS secret makes
  * someone an admin here, able to add places and photos. It reuses Alma
  * Housila's list, as Mini Games and the landing page do, so the secret
- * needs no entry of its own. Give Paris Live its own list by adding an
+ * needs no entry of its own. Give Irma in Paris its own list by adding an
  * `irma-in-paris=…` entry to APP_ACCESS and naming it here.
  */
 export const ADMIN_APP = "alma-housila";

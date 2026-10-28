@@ -1,24 +1,28 @@
-import type { ApiError, Photo, Place } from "./api";
+import type { ApiError, Photo, PickedPlace, Place, Suggestion } from "./api";
 import { LARGE_SIDE, THUMB_SIDE, shrink } from "./resize";
 
-/** What the admin forms send, and the server's reasons put in words. */
+/** What the add-a-place form sends: the restaurant is Google's, by its id. */
 export interface PlaceForm {
-  name: string;
+  placeId: string;
+  session: string;
   cuisine: string;
-  address: string;
   visitedOn: string;
   dish: string;
 }
 
 const REASONS = new Map(
   Object.entries({
-    address: "That address could not be found. Try adding the postcode.",
     admin: "Only admins can change places. Sign in with an admin account.",
+    "already-added": "That restaurant is already on the map.",
+    cuisine: "Pick a cuisine from the menu.",
     date: "The date does not look right.",
-    geocoder: "The address search is not answering. Try again in a minute.",
+    google: "Google Maps is not answering. Try again in a minute.",
+    "no-google-key": "Adding restaurants needs the server's Google Maps key.",
+    "not-a-restaurant": "Google Maps does not list that as somewhere to eat.",
     origin: "That came from another site, so it was refused.",
     photo: "That photo could not be read. Try a JPEG or PNG.",
-    place: "A place needs a name and an address.",
+    place: "Pick a restaurant from the list first.",
+    "slow-down": "That's a lot of searching. Wait a minute and try again.",
     "too-big": "That photo is too big.",
   })
 );
@@ -41,6 +45,22 @@ const send = async <T>(path: string, init: RequestInit): Promise<T> => {
   // SAFETY: /api answers what src/lib/api.ts describes
   return (response.status === 204 ? undefined : await response.json()) as T;
 };
+
+/** Restaurants Google Maps knows by that name, near Paris. */
+export const searchPlaces = (query: string, session: string) =>
+  send<Suggestion[]>(
+    `/api/places/search?${new URLSearchParams({ q: query, session })}`,
+    { method: "GET" }
+  );
+
+/** The picked restaurant's address and the cuisine Google gives it. */
+export const pickPlace = (placeId: string, session: string) =>
+  send<PickedPlace>(
+    `/api/places/pick?${new URLSearchParams({ id: placeId, session })}`,
+    {
+      method: "GET",
+    }
+  );
 
 export const addPlace = (form: PlaceForm) =>
   send<Place>("/api/places", {

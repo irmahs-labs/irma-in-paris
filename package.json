@@ -17,13 +17,17 @@
     "db:up": "docker compose up -d --wait db && docker compose run --rm migrate up",
     "db:new": "docker compose run --rm migrate new",
     "db:reset": "docker compose down -v db && npm run db:up",
-    "storage:up": "docker compose up -d --wait garage && sh scripts/garage-init.sh"
+    "storage:up": "docker compose up -d --wait garage && sh scripts/garage-init.sh",
+    "map:fetch": "sh scripts/map-fetch.sh"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.17",
+    "@protomaps/basemaps": "^5.7.2",
     "aws4fetch": "^1.0.20",
     "hono": "^4.13.13",
+    "maplibre-gl": "^6.16.0",
     "pg": "^8.23.1",
+    "pmtiles": "^4.5.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7"

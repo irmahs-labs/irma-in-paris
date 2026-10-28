@@ -1,13 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { AppWindow } from "../components/app-window";
-import { ParisMap, pinStyle } from "../components/paris-map";
+import { LazyMap } from "../components/lazy-map";
+import { CUISINES } from "../data/cuisines";
 import * as admin from "../lib/admin";
-import type { PlaceForm } from "../lib/admin";
-import type { Me, Photo, Place } from "../lib/api";
+import type { Me, Photo, PickedPlace, Place, Suggestion } from "../lib/api";
 import { Icon } from "../lib/icon";
-import { ALL_PARIS } from "../lib/map";
 import { useApi } from "../lib/use-api";
 import { useConfirm } from "../lib/use-confirm";
 
@@ -76,34 +75,165 @@ const Viewer = ({
   );
 };
 
-const EMPTY: PlaceForm = {
-  address: "",
-  cuisine: "",
-  dish: "",
-  name: "",
-  visitedOn: "",
-};
+/** How long typing pauses before Google is asked. */
+const TYPING_MS = 250;
 
-/** Admins only: a new place, found on the map from its address. */
-const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
-  const [form, setForm] = useState(EMPTY);
-  const [busy, setBusy] = useState(false);
+/**
+ * Admins only: the restaurant's name, typed, and Google Maps' restaurants
+ * by that name to pick from, as a combobox. Only a place Google lists as
+ * somewhere to eat can be picked.
+ */
+const RestaurantSearch = ({
+  session,
+  onPick,
+}: {
+  session: string;
+  onPick: (place: PickedPlace) => void;
+}) => {
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
+  const listId = useId();
 
-  const field = (key: keyof PlaceForm) => ({
-    onChange: (event: { target: { value: string } }) =>
-      setForm({ ...form, [key]: event.target.value }),
-    value: form[key],
-  });
+  useEffect(() => {
+    const typed = query.trim();
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+    if (typed.length < 2) {
+      setSuggestions([]);
+
+      return;
+    }
+
+    let alive = true;
+
+    const timer = setTimeout(async () => {
+      try {
+        const found = await admin.searchPlaces(typed, session);
+
+        if (alive) {
+          setSuggestions(found);
+          setProblem(
+            found.length === 0
+              ? "No restaurant by that name on Google Maps."
+              : ""
+          );
+        }
+      } catch (error) {
+        if (alive) {
+          setProblem(error instanceof Error ? error.message : "");
+        }
+      }
+    }, TYPING_MS);
+
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [query, session]);
+
+  const pick = async (suggestion: Suggestion) => {
     setBusy(true);
     setProblem("");
 
     try {
-      onAdded(await admin.addPlace(form));
-      setForm(EMPTY);
+      onPick(await admin.pickPlace(suggestion.placeId, session));
+      setQuery("");
+      setSuggestions([]);
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="search">
+      <label>
+        Restaurant
+        <input
+          className="field"
+          type="search"
+          role="combobox"
+          aria-expanded={suggestions.length > 0}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          autoComplete="off"
+          placeholder="Search Google Maps by name"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+      {suggestions.length > 0 ? (
+        <ul
+          id={listId}
+          role="listbox"
+          className="search__list"
+          aria-busy={busy}
+        >
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.placeId} role="option" aria-selected="false">
+              <button
+                type="button"
+                className="search__option"
+                disabled={busy}
+                onClick={() => pick(suggestion)}
+              >
+                <span className="place-row__name">{suggestion.name}</span>
+                <span className="place-row__more">{suggestion.address}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="form__error" role="status">
+        {problem}
+      </p>
+    </div>
+  );
+};
+
+/** Admins only: a new place, picked from Google Maps, with its cuisine, date and dish. */
+const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
+  // One Google session per restaurant searched for and added.
+  const [session, setSession] = useState(() => crypto.randomUUID());
+  const [chosen, setChosen] = useState<PickedPlace | null>(null);
+  const [cuisine, setCuisine] = useState("");
+  const [visitedOn, setVisitedOn] = useState("");
+  const [dish, setDish] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+
+  const choose = (place: PickedPlace) => {
+    setChosen(place);
+    setCuisine(place.cuisine ?? "");
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!chosen) {
+      return;
+    }
+
+    setBusy(true);
+    setProblem("");
+
+    try {
+      onAdded(
+        await admin.addPlace({
+          cuisine,
+          dish,
+          placeId: chosen.placeId,
+          session,
+          visitedOn,
+        })
+      );
+      setChosen(null);
+      setCuisine("");
+      setVisitedOn("");
+      setDish("");
+      setSession(crypto.randomUUID());
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "");
     } finally {
@@ -114,46 +244,66 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
   return (
     <AppWindow title="add_place.form" size="full">
       <form className="form" onSubmit={submit}>
+        {chosen ? (
+          <div className="chosen">
+            <span className="tile__label">restaurant</span>
+            <span className="selected__name">{chosen.name}</span>
+            <span>{chosen.address}</span>
+            <button
+              type="button"
+              className="btn btn--pill"
+              onClick={() => setChosen(null)}
+            >
+              change
+            </button>
+          </div>
+        ) : (
+          <RestaurantSearch session={session} onPick={choose} />
+        )}
         <div className="form__grid">
           <label>
-            Name
-            <input
-              className="field"
-              required
-              maxLength={80}
-              {...field("name")}
-            />
-          </label>
-          <label>
-            Address
-            <input
-              className="field"
-              required
-              maxLength={200}
-              placeholder="12 rue de la Roquette, 75011"
-              {...field("address")}
-            />
-          </label>
-          <label>
             Cuisine
-            <input
+            <select
               className="field"
-              maxLength={40}
-              placeholder="Cambodian"
-              {...field("cuisine")}
-            />
+              required
+              value={cuisine}
+              onChange={(event) => setCuisine(event.target.value)}
+            >
+              <option value="" disabled>
+                Pick one
+              </option>
+              {CUISINES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             Visited on
-            <input className="field" type="date" {...field("visitedOn")} />
+            <input
+              className="field"
+              type="date"
+              value={visitedOn}
+              onChange={(event) => setVisitedOn(event.target.value)}
+            />
           </label>
           <label>
             What I ate
-            <input className="field" maxLength={120} {...field("dish")} />
+            <input
+              className="field"
+              maxLength={120}
+              value={dish}
+              onChange={(event) => setDish(event.target.value)}
+            />
           </label>
         </div>
         <div className="form__actions">
-          <button type="submit" className="btn btn--primary" disabled={busy}>
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={busy || !chosen || !cuisine}
+          >
             <Icon name="plus" size={16} />
             {busy ? "adding…" : "add place"}
           </button>
@@ -305,22 +455,27 @@ export const PlacesScreen = () => {
           <p className="notice">The places could not be loaded just now.</p>
         ) : null}
         <div className="split">
-          <ParisMap box={ALL_PARIS} minHeight={300}>
-            {places.map((entry, i) => (
-              <button
-                key={entry.id}
-                type="button"
-                aria-pressed={entry.id === place?.id}
-                aria-label={entry.name}
-                className="pin pin--place"
-                style={pinStyle(ALL_PARIS, entry.lat, entry.lon)}
-                onClick={() => setPicked(entry.id)}
-              >
-                <Icon name="fork" size={16} />
-                {i + 1}
-              </button>
-            ))}
-          </ParisMap>
+          <LazyMap
+            label="Map of the restaurants"
+            focus={picked}
+            markers={places.map((entry, i) => ({
+              id: entry.id,
+              lat: entry.lat,
+              lon: entry.lon,
+              node: (
+                <button
+                  type="button"
+                  aria-pressed={entry.id === place?.id}
+                  aria-label={entry.name}
+                  className="pin pin--place"
+                  onClick={() => setPicked(entry.id)}
+                >
+                  <Icon name="fork" size={16} />
+                  {i + 1}
+                </button>
+              ),
+            }))}
+          />
           <fieldset className="panel places">
             <legend className="legend">restaurants</legend>
             {data && places.length === 0 ? (
@@ -357,6 +512,12 @@ export const PlacesScreen = () => {
                 <span className="tile__label">selected</span>
                 <span className="selected__name">{place.name}</span>
                 <span>{place.address}</span>
+                <span>
+                  {place.cuisine} ·{" "}
+                  <a href={place.mapsUrl} target="_blank" rel="noreferrer">
+                    open in Google Maps
+                  </a>
+                </span>
                 {place.visitedOn || place.dish ? (
                   <span>
                     {[

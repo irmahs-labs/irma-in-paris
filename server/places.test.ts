@@ -18,11 +18,13 @@ const ADMIN = "00000000-0000-4000-8000-00000000000a";
 
 const place = (name: string, visitedOn: string | null) => ({
   address: "12 Rue de la Roquette 75011 Paris",
-  area: "11e",
+  area: "11th",
   cuisine: "Cambodian",
   dish: "Lok lak",
+  googlePlaceId: `ChIJ-${name}`,
   lat: 48.8536,
   lon: 2.3707,
+  mapsUrl: `https://maps.google.com/?q=${name}`,
   name,
   visitedOn,
 });
@@ -38,16 +40,27 @@ describe.skipIf(!url)("places in Postgres", () => {
     await pool.end();
   });
 
-  it("lists the most recently visited first, undated last, each with its photos in order", async () => {
-    const old = await addPlace(pool, place("Old", "2025-01-02"));
-    const fresh = await addPlace(pool, place("Fresh", "2026-10-12"));
+  /** Adds a place that is not on the map yet: its id. */
+  const added = async (name: string, visitedOn: string | null) => {
+    const row = await addPlace(pool, place(name, visitedOn));
 
-    await addPlace(pool, place("Undated", null));
+    if (!row) {
+      throw new Error(`${name} was already on the map`);
+    }
+
+    return row.id;
+  };
+
+  it("lists the most recently visited first, undated last, each with its photos in order", async () => {
+    const old = await added("Old", "2025-01-02");
+    const fresh = await added("Fresh", "2026-10-12");
+
+    await added("Undated", null);
     await addPhoto(pool, {
       caption: "one",
       height: 600,
       id: "00000000-0000-4000-8000-000000000001",
-      placeId: old.id,
+      placeId: old,
       uploadedBy: ADMIN,
       width: 800,
     });
@@ -55,7 +68,7 @@ describe.skipIf(!url)("places in Postgres", () => {
       caption: "two",
       height: 600,
       id: "00000000-0000-4000-8000-000000000002",
-      placeId: old.id,
+      placeId: old,
       uploadedBy: ADMIN,
       width: 800,
     });
@@ -67,19 +80,24 @@ describe.skipIf(!url)("places in Postgres", () => {
       "Old",
       "Undated",
     ]);
-    expect(places[0]).toEqual({
-      ...place("Fresh", "2026-10-12"),
-      id: fresh.id,
-      photos: [],
-    });
+    const { googlePlaceId: _id, ...shown } = place("Fresh", "2026-10-12");
+
+    expect(places[0]).toEqual({ ...shown, id: fresh, photos: [] });
     expect(places[1]?.photos.map((photo) => photo.caption)).toEqual([
       "one",
       "two",
     ]);
   });
 
+  it("keeps each Google place once", async () => {
+    await added("Twice", null);
+
+    expect(await addPlace(pool, place("Twice", "2026-10-12"))).toBeNull();
+    expect(await readPlaces(pool)).toHaveLength(1);
+  });
+
   it("adds photos only to a place that exists, and removes them with it", async () => {
-    const { id } = await addPlace(pool, place("Here", null));
+    const id = await added("Here", null);
 
     const photo = {
       caption: "",
