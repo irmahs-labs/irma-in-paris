@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+import { LOCALES } from "./language";
+import type { Language } from "./language";
+
 /** The time now, ticking every `everyMs`, for clocks and countdowns. */
 export const useNow = (everyMs = 30_000) => {
   const [now, setNow] = useState(() => new Date());
@@ -20,18 +23,22 @@ const TIME = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Paris",
 });
 
-const TODAY = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "long",
-  timeZone: "Europe/Paris",
-  weekday: "long",
-});
+const today = (language: Language) =>
+  new Intl.DateTimeFormat(LOCALES[language], {
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/Paris",
+    weekday: "long",
+  });
+
+const TODAY = { en: today("en"), fr: today("fr") };
 
 /** "14:05", in Paris whatever the visitor's own time zone. */
 export const parisTime = (date: Date) => TIME.format(date);
 
-/** "Tuesday 28 October", in Paris. */
-export const parisToday = (date: Date) => TODAY.format(date).replace(",", "");
+/** "Tuesday 28 October" (or "mardi 28 octobre"), in Paris. */
+export const parisToday = (date: Date, language: Language = "en") =>
+  TODAY[language].format(date).replace(",", "");
 
 /** Minutes since midnight in Paris. */
 export const parisMinutes = (date: Date) => {

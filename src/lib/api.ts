@@ -16,6 +16,12 @@ export type SkyKind =
   | "snow"
   | "storm";
 
+/** Words the server writes, in each of the site's languages. */
+export interface Localized {
+  en: string;
+  fr: string;
+}
+
 export interface WeatherReport {
   /** When Open-Meteo's current values are from, as an ISO time in Paris. */
   updatedAt: string;
@@ -23,7 +29,7 @@ export interface WeatherReport {
     temp: number;
     feelsLike: number;
     sky: SkyKind;
-    label: string;
+    label: Localized;
     uv: number;
     windKmh: number;
     gustsKmh: number;
@@ -41,7 +47,7 @@ export interface WeatherReport {
   days: {
     date: string;
     sky: SkyKind;
-    label: string;
+    label: Localized;
     hi: number;
     lo: number;
     rain: number;
@@ -60,8 +66,8 @@ export interface LineStatus {
   /** The line's key in this app: "metro:1", "rer:A", "transilien:H". */
   key: string;
   level: LineLevel;
-  /** What is happening, in English, or that traffic is normal. */
-  detail: string;
+  /** What is happening, or that traffic is normal, in English and in French. */
+  detail: Localized;
 }
 
 export interface TrafficReport {

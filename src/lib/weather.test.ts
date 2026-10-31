@@ -58,3 +58,15 @@ describe("sunAt", () => {
     expect(durationOf(SUNSET - SUNRISE)).toBe("10 h 07");
   });
 });
+
+describe("in French", () => {
+  it("words the scales, the wind and the days in French", () => {
+    expect(uvLevel(7, "fr")).toMatchObject({ label: "élevé", step: 2 });
+    expect(aqiLevel(34, "fr")).toEqual({ label: "moyen", step: 1 });
+    expect(compassOf(225, "fr")).toBe("SO");
+    expect(dayOf("2026-10-29", "fr")).toEqual({ date: "29 oct.", day: "jeu." });
+    expect(sunAt(20 * 60, 7 * 60, 18 * 60, "fr")).toMatchObject({
+      summary: "le soleil est couché",
+    });
+  });
+});

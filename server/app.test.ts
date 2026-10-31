@@ -533,7 +533,10 @@ describe("transport", () => {
       statuses: (lines) =>
         Promise.resolve(
           lines.map((line) => ({
-            detail: "Traffic normal on the whole line",
+            detail: {
+              en: "Traffic normal on the whole line",
+              fr: "Trafic normal sur l’ensemble de la ligne",
+            },
             key: line.key,
             level: "ok" as const,
           }))
@@ -578,7 +581,10 @@ describe("transport", () => {
 
     expect(status.lines).toEqual([
       {
-        detail: "Traffic normal on the whole line",
+        detail: {
+          en: "Traffic normal on the whole line",
+          fr: "Trafic normal sur l’ensemble de la ligne",
+        },
         key: "metro:1",
         level: "ok",
       },

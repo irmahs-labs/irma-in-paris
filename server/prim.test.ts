@@ -201,12 +201,18 @@ describe("toStatuses", () => {
 
     expect(statuses).toEqual([
       {
-        detail: "Traffic normal on the whole line",
+        detail: {
+          en: "Traffic normal on the whole line",
+          fr: "Trafic normal sur l’ensemble de la ligne",
+        },
         key: "metro:1",
         level: "ok",
       },
       {
-        detail: "Traffic normal on the whole line",
+        detail: {
+          en: "Traffic normal on the whole line",
+          fr: "Trafic normal sur l’ensemble de la ligne",
+        },
         key: "metro:4",
         level: "ok",
       },
@@ -262,7 +268,7 @@ describe("toStatuses", () => {
     expect(statuses[0]?.level).toBe("ok");
   });
 
-  it("describes an active disruption in English, from its effect and section", () => {
+  it("describes an active disruption in English and French, from its effect and section", () => {
     const [, line4] = toStatuses(
       [METRO_1, METRO_4],
       report({
@@ -288,7 +294,10 @@ describe("toStatuses", () => {
     );
 
     expect(line4).toEqual({
-      detail: "Delays between Châtelet and Montparnasse - Bienvenüe",
+      detail: {
+        en: "Delays between Châtelet and Montparnasse - Bienvenüe",
+        fr: "Retards entre Châtelet et Montparnasse - Bienvenüe",
+      },
       key: "metro:4",
       level: "warn",
     });
@@ -308,8 +317,10 @@ describe("toStatuses", () => {
     );
 
     expect(tonight[0]).toEqual({
-      detail:
-        "Works: No trains between La Défense and Nanterre-Préfecture from 22:30 today",
+      detail: {
+        en: "Works: No trains between La Défense and Nanterre-Préfecture from 22:30 today",
+        fr: "Travaux : Trafic interrompu entre La Défense et Nanterre-Préfecture à partir de 22:30 aujourd’hui",
+      },
       key: "metro:1",
       level: "works",
     });
@@ -322,8 +333,9 @@ describe("describe", () => {
     const item = report({ disruptions: [works("w", "20261029T223000")] })
       .disruptions?.[0];
 
-    expect(item && describeDisruption(item, NOW)).toBe(
-      "Works: No trains between La Défense and Nanterre-Préfecture from Thu 29 Oct, 22:30"
-    );
+    expect(item && describeDisruption(item, NOW)).toEqual({
+      en: "Works: No trains between La Défense and Nanterre-Préfecture from Thu 29 Oct, 22:30",
+      fr: "Travaux : Trafic interrompu entre La Défense et Nanterre-Préfecture à partir du jeu. 29 oct., 22:30",
+    });
   });
 });

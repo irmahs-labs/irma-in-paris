@@ -351,6 +351,37 @@ a:hover {
   min-height: 40px;
   padding: 4px 14px;
 }
+/* The header's language pill: EN and FR, the page's language pressed. */
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  margin: 0;
+  padding: 3px;
+  border: 2px solid var(--outline);
+  border-radius: 999px;
+  background: var(--raised);
+}
+.lang-toggle__option {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: 700 13px/1 var(--body);
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.lang-toggle__option:hover {
+  background: var(--panel);
+}
+.lang-toggle__option[aria-pressed="true"] {
+  border-color: var(--outline);
+  background: var(--selected);
+  color: var(--on-selected);
+}
 .btn--spin {
   min-height: 56px;
   min-width: 220px;

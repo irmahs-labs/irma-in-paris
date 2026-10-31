@@ -1,4 +1,18 @@
+import { useCopy } from "../lib/language";
 import { accountUrl, firstName, useSession } from "../lib/session";
+
+const COPY = {
+  en: {
+    signIn: "sign in",
+    signedInAs: (email: string) => `Signed in as ${email}`,
+    withGoogle: "sign in with Google",
+  },
+  fr: {
+    signIn: "se connecter",
+    signedInAs: (email: string) => `Compte connecté : ${email}`,
+    withGoogle: "se connecter avec Google",
+  },
+};
 
 // Google's own four-colour mark: never recoloured or redrawn
 const GoogleMark = () => (
@@ -31,6 +45,7 @@ const GoogleMark = () => (
  */
 export const AccountButton = () => {
   const user = useSession();
+  const t = useCopy(COPY);
 
   if (user === undefined) {
     return null;
@@ -40,11 +55,11 @@ export const AccountButton = () => {
 
   if (user === null) {
     return (
-      <a className="account" href={href} title="sign in with Google">
+      <a className="account" href={href} title={t.withGoogle}>
         <span className="account__icon">
           <GoogleMark />
         </span>
-        <span className="account__text">sign in</span>
+        <span className="account__text">{t.signIn}</span>
       </a>
     );
   }
@@ -52,7 +67,7 @@ export const AccountButton = () => {
   const name = firstName(user);
 
   return (
-    <a className="account" href={href} title={`Signed in as ${user.email}`}>
+    <a className="account" href={href} title={t.signedInAs(user.email)}>
       <span className="account__icon">
         {user.image ? (
           // Google's picture host refuses requests that carry a referrer
