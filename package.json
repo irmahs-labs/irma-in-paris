@@ -21,7 +21,7 @@
     "map:fetch": "sh scripts/map-fetch.sh"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.17",
+    "@hono/node-server": "^2.1.5",
     "@protomaps/basemaps": "^5.7.2",
     "aws4fetch": "^1.0.20",
     "hono": "^4.13.13",
