@@ -137,7 +137,13 @@ const getJson = async <T>(
   const response = await fetcher(url, { signal: AbortSignal.timeout(8000) });
 
   if (!response.ok) {
-    throw new Error(`Vélib' answered ${response.status}`);
+    // The start of the body says who refused: Vélib' itself, or the
+    // firewall in front of it.
+    const body = await response.text();
+
+    throw new Error(
+      `Vélib' answered ${response.status} for ${url}: ${body.slice(0, 300)}`
+    );
   }
 
   return schema.parse(await response.json());

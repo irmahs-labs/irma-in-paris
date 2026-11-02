@@ -19,6 +19,8 @@ const REASONS = {
       cuisine: "Pick a cuisine from the menu.",
       date: "The date does not look right.",
       google: "Google Maps is not answering. Try again in a minute.",
+      "google-key":
+        "Google Maps refused the server's key. In Google Cloud, check that Places API (New) is enabled, billing is on, and the key allows it.",
       "no-google-key": "Adding restaurants needs the server's Google Maps key.",
       "not-a-restaurant": "Google Maps does not list that as somewhere to eat.",
       origin: "That came from another site, so it was refused.",
@@ -36,6 +38,8 @@ const REASONS = {
       cuisine: "Choisissez une cuisine dans le menu.",
       date: "La date ne semble pas correcte.",
       google: "Google Maps ne répond pas. Réessayez dans une minute.",
+      "google-key":
+        "Google Maps a refusé la clé du serveur. Dans Google Cloud, vérifiez que Places API (New) est activée, la facturation aussi, et que la clé l’autorise.",
       "no-google-key":
         "Ajouter des restaurants demande la clé Google Maps du serveur.",
       "not-a-restaurant":
