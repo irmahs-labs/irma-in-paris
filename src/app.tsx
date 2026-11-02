@@ -5,6 +5,8 @@ import { Header } from "./components/header";
 import { APP_NAME } from "./lib/brand";
 import { Icon } from "./lib/icon";
 import type { IconName } from "./lib/icon";
+import { useCopy, useLanguage } from "./lib/language";
+import type { Language } from "./lib/language";
 import { Link, usePath } from "./lib/router";
 import { PlacesScreen } from "./screens/places";
 import { RegionScreen } from "./screens/region";
@@ -13,8 +15,9 @@ import { WeatherScreen } from "./screens/weather";
 
 interface Section {
   path: string;
-  name: string;
-  hint: string;
+  /** Its name and the line under it, in each language. */
+  name: Record<Language, string>;
+  hint: Record<Language, string>;
   icon: IconName;
   Screen: () => ReactNode;
 }
@@ -22,65 +25,85 @@ interface Section {
 const SECTIONS: readonly Section[] = [
   {
     Screen: WeatherScreen,
-    hint: "Now and the next 7 days",
+    hint: {
+      en: "Now and the next 7 days",
+      fr: "Maintenant et les 7 prochains jours",
+    },
     icon: "weather",
-    name: "weather",
+    name: { en: "weather", fr: "météo" },
     path: "/",
   },
   {
     Screen: TransportScreen,
-    hint: "Metro, line status, Vélib'",
+    hint: {
+      en: "Metro, line status, Vélib'",
+      fr: "Métro, état des lignes, Vélib'",
+    },
     icon: "train",
-    name: "public transport",
+    name: { en: "public transport", fr: "transports en commun" },
     path: "/transport",
   },
   {
     Screen: RegionScreen,
-    hint: "Pollen, pollution, weather by town",
+    hint: {
+      en: "Pollen, pollution, weather by town",
+      fr: "Pollen, pollution, météo par ville",
+    },
     icon: "map",
-    name: "Île-de-France",
+    name: { en: "Île-de-France", fr: "Île-de-France" },
     path: "/region",
   },
   {
     Screen: PlacesScreen,
-    hint: "Restaurants on a map",
+    hint: { en: "Restaurants on a map", fr: "Les restaurants sur une carte" },
     icon: "pin",
-    name: "places I've been",
+    name: { en: "places I've been", fr: "où j’ai mangé" },
     path: "/places",
   },
 ];
 
+const MENU_COPY = {
+  en: { menu: "menu", sections: "sections" },
+  fr: { menu: "menu", sections: "rubriques" },
+};
+
 /** The three sections, as a side menu on a wide screen and a row of buttons on a phone. */
-const Menu = ({ path }: { path: string }) => (
-  <fieldset className="panel side">
-    <legend className="legend">menu</legend>
-    <nav aria-label="sections">
-      <ul className="side__list">
-        {SECTIONS.map((section) => (
-          <li key={section.path}>
-            <Link
-              href={section.path}
-              className="side__item"
-              aria-current={section.path === path ? "page" : undefined}
-            >
-              <Icon name={section.icon} size={20} weight={2} />
-              <span className="side__text">
-                <span>{section.name}</span>
-                <span className="side__hint">{section.hint}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  </fieldset>
-);
+const Menu = ({ path }: { path: string }) => {
+  const language = useLanguage();
+  const t = useCopy(MENU_COPY);
+
+  return (
+    <fieldset className="panel side">
+      <legend className="legend">{t.menu}</legend>
+      <nav aria-label={t.sections}>
+        <ul className="side__list">
+          {SECTIONS.map((section) => (
+            <li key={section.path}>
+              <Link
+                href={section.path}
+                className="side__item"
+                aria-current={section.path === path ? "page" : undefined}
+              >
+                <Icon name={section.icon} size={20} weight={2} />
+                <span className="side__text">
+                  <span>{section.name[language]}</span>
+                  <span className="side__hint">{section.hint[language]}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </fieldset>
+  );
+};
 
 /** Every page: the header, the menu and the section, and the footer under them. */
 export const App = () => {
   // "/places/" and "/places" are the same page; anything unknown is the weather.
   const asked = usePath().replace(/\/+$/u, "") || "/";
   const section = SECTIONS.find((entry) => entry.path === asked) ?? SECTIONS[0];
+  const language = useLanguage();
 
   if (!section) {
     return null;
@@ -89,7 +112,7 @@ export const App = () => {
   return (
     <>
       {section.path === "/" ? null : (
-        <title>{`${section.name} · ${APP_NAME}`}</title>
+        <title>{`${section.name[language]} · ${APP_NAME}`}</title>
       )}
       <Header />
       <main className="page">

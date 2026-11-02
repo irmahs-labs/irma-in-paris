@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { AppWindow } from "../components/app-window";
 import { LazyMap } from "../components/lazy-map";
 import { LineBadge } from "../components/line-badge";
-import { LINES, MODES, modeName, shownCode } from "../data/lines";
+import { LINES, MODES, lineTitle, modeName, shownCode } from "../data/lines";
 import type { TransitLine } from "../data/lines";
 import type {
   Departures,
@@ -14,17 +14,89 @@ import type {
 } from "../lib/api";
 import { parisTime } from "../lib/clock";
 import { Icon } from "../lib/icon";
+import { useCopy, useLanguage } from "../lib/language";
 import { useApi } from "../lib/use-api";
 
 const NO_KEY = "no-prim-key";
 
-const PrimProblem = ({ error }: { error: string }) => (
-  <p className="notice">
-    {error === NO_KEY
-      ? "Live times are off: the server has no PRIM key yet."
-      : "PRIM could not be reached just now. It will try again shortly."}
-  </p>
-);
+const COPY = {
+  en: {
+    allLines: "All lines",
+    asOf: (time: string) => `, as of ${time}`,
+    bikes: (name: string, n: number) => `${name}, ${n} bikes`,
+    docks: "Free docks",
+    ebike: "e-bike",
+    ebikes: "E-bikes",
+    filter: "filter",
+    findOne: (n: number) => `Find one of ${n} stops`,
+    findStop: (line: string) => `Find a stop on ${line}`,
+    issues: (n: number) => `${n === 1 ? "line" : "lines"} with disruptions`,
+    issuesOnly: "Issues only",
+    levels: { ok: "normal", warn: "disrupted", works: "works" },
+    line: "1 · Line",
+    lineStatus: "Line status",
+    loadingStops: "Loading the stops…",
+    mechanical: "mechanical",
+    mechanicalBikes: "Mechanical bikes",
+    minAt: (at: string) => `min · ${at}`,
+    noDisruptions: "No disruptions on any line.",
+    noKey: "Live times are off: the server has no PRIM key yet.",
+    noStop: "No stop by that name.",
+    noTrains: "No trains announced from here right now.",
+    primDown: "PRIM could not be reached just now. It will try again shortly.",
+    station: "station",
+    stop: "2 · Stop",
+    stopGroup: "stop",
+    sub: "Next trains on every metro, RER and Transilien line, line status and Vélib'.",
+    tapPin:
+      "Tap a pin to see its bikes and free docks. The number on each pin is bikes available now",
+    title: "Public transport",
+    updated: (time: string) => `updated ${time}`,
+    velibDown: "Vélib' could not be reached just now.",
+    velibMap: "Map of Vélib' stations",
+  },
+  fr: {
+    allLines: "Toutes les lignes",
+    asOf: (time: string) => `, à ${time}`,
+    bikes: (name: string, n: number) => `${name}, ${n} vélos`,
+    docks: "Bornes libres",
+    ebike: "électrique",
+    ebikes: "Vélos électriques",
+    filter: "filtre",
+    findOne: (n: number) => `Chercher parmi ${n} arrêts`,
+    findStop: (line: string) => `Chercher un arrêt sur le ${line}`,
+    issues: (n: number) => `${n > 1 ? "lignes perturbées" : "ligne perturbée"}`,
+    issuesOnly: "Perturbations",
+    levels: { ok: "normal", warn: "perturbé", works: "travaux" },
+    line: "1 · Ligne",
+    lineStatus: "État des lignes",
+    loadingStops: "Chargement des arrêts…",
+    mechanical: "mécanique",
+    mechanicalBikes: "Vélos mécaniques",
+    minAt: (at: string) => `min · ${at}`,
+    noDisruptions: "Aucune perturbation sur les lignes.",
+    noKey: "Horaires en direct coupés : le serveur n’a pas encore de clé PRIM.",
+    noStop: "Aucun arrêt de ce nom.",
+    noTrains: "Aucun train annoncé d’ici pour le moment.",
+    primDown: "PRIM ne répond pas pour le moment. Nouvel essai sous peu.",
+    station: "station",
+    stop: "2 · Arrêt",
+    stopGroup: "arrêt",
+    sub: "Les prochains trains sur toutes les lignes de métro, RER et Transilien, l’état des lignes et Vélib'.",
+    tapPin:
+      "Touchez une épingle pour voir ses vélos et ses bornes libres. Le nombre sur chaque épingle, ce sont les vélos disponibles",
+    title: "Transports en commun",
+    updated: (time: string) => `mis à jour à ${time}`,
+    velibDown: "Vélib' ne répond pas pour le moment.",
+    velibMap: "Carte des stations Vélib'",
+  },
+};
+
+const PrimProblem = ({ error }: { error: string }) => {
+  const t = useCopy(COPY);
+
+  return <p className="notice">{error === NO_KEY ? t.noKey : t.primDown}</p>;
+};
 
 /** Ignores accents and case, so "chatelet" finds "Châtelet". */
 const plain = (text: string) =>
@@ -41,6 +113,8 @@ const Departure = ({ line, stop }: { line: TransitLine; stop: Stop }) => {
     30_000
   );
 
+  const t = useCopy(COPY);
+
   return (
     <div className="result" aria-live="polite">
       <div className="result__head">
@@ -49,7 +123,7 @@ const Departure = ({ line, stop }: { line: TransitLine; stop: Stop }) => {
       </div>
       {error ? <PrimProblem error={error} /> : null}
       {data && data.directions.length === 0 ? (
-        <p className="notice">No trains announced from here right now.</p>
+        <p className="notice">{t.noTrains}</p>
       ) : null}
       {data?.directions.map((direction) => (
         <div key={direction.towards} className="direction">
@@ -58,7 +132,7 @@ const Departure = ({ line, stop }: { line: TransitLine; stop: Stop }) => {
             {direction.trains.map((train) => (
               <div key={`${train.at}-${train.minutes}`} className="train">
                 <span className="train__min">{train.minutes}</span>
-                <span className="train__at">min · {train.at}</span>
+                <span className="train__at">{t.minAt(train.at)}</span>
               </div>
             ))}
           </div>
@@ -82,6 +156,8 @@ const Stops = ({
   );
 
   const [filter, setFilter] = useState("");
+  const language = useLanguage();
+  const t = COPY[language];
 
   const shown = useMemo(
     () =>
@@ -100,14 +176,12 @@ const Stops = ({
       <input
         className="field"
         type="search"
-        aria-label={`Find a stop on ${line.title}`}
-        placeholder={
-          data ? `Find one of ${data.length} stops` : "Loading the stops…"
-        }
+        aria-label={t.findStop(lineTitle(line, language))}
+        placeholder={data ? t.findOne(data.length) : t.loadingStops}
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
-      <div role="group" aria-label="stop" className="stops">
+      <div role="group" aria-label={t.stopGroup} className="stops">
         {shown.map((stop) => (
           <button
             key={stop.id}
@@ -126,9 +200,7 @@ const Stops = ({
             {stop.name}
           </button>
         ))}
-        {data && shown.length === 0 ? (
-          <p className="hint">No stop by that name.</p>
-        ) : null}
+        {data && shown.length === 0 ? <p className="hint">{t.noStop}</p> : null}
       </div>
     </>
   );
@@ -138,26 +210,28 @@ const NextTrain = ({ lines }: { lines: readonly TransitLine[] }) => {
   const [lineKey, setLineKey] = useState(lines[0]?.key ?? "");
   const [stop, setStop] = useState<Stop | null>(null);
   const line = lines.find((entry) => entry.key === lineKey) ?? lines[0];
+  const language = useLanguage();
+  const t = COPY[language];
 
   return (
     <AppWindow title="next_train.exe" size="third">
       <div className="step">
-        <span className="step__label">1 · Line</span>
+        <span className="step__label">{t.line}</span>
         {MODES.map((mode) => (
           <div
             key={mode}
             role="group"
-            aria-label={modeName(mode)}
+            aria-label={modeName(mode, language)}
             className="lines"
           >
-            <span className="lines__mode">{modeName(mode)}</span>
+            <span className="lines__mode">{modeName(mode, language)}</span>
             {lines
               .filter((entry) => entry.mode === mode)
               .map((entry) => (
                 <button
                   key={entry.key}
                   type="button"
-                  aria-label={entry.title}
+                  aria-label={lineTitle(entry, language)}
                   aria-pressed={entry.key === line?.key}
                   className={`badge badge--${entry.mode} badge--pick`}
                   style={{ background: entry.colour, color: entry.ink }}
@@ -174,7 +248,7 @@ const NextTrain = ({ lines }: { lines: readonly TransitLine[] }) => {
       </div>
       {line ? (
         <div className="step">
-          <span className="step__label">2 · Stop</span>
+          <span className="step__label">{t.stop}</span>
           <Stops key={line.key} line={line} picked={stop} onPick={setStop} />
         </div>
       ) : null}
@@ -188,6 +262,7 @@ const Velib = () => {
   const [picked, setPicked] = useState<string>();
   const stations = data?.stations ?? [];
   const station = stations.find((entry) => entry.id === picked) ?? stations[0];
+  const t = useCopy(COPY);
 
   const capacity = station
     ? station.mechanical + station.ebike + station.docks
@@ -198,12 +273,10 @@ const Velib = () => {
 
   return (
     <AppWindow title="velib.map" size="wide">
-      {error && !data ? (
-        <p className="notice">Vélib' could not be reached just now.</p>
-      ) : null}
+      {error && !data ? <p className="notice">{t.velibDown}</p> : null}
       <div className="split">
         <LazyMap
-          label="Map of Vélib' stations"
+          label={t.velibMap}
           markers={stations.map((entry) => {
             const bikes = entry.mechanical + entry.ebike;
 
@@ -215,7 +288,7 @@ const Velib = () => {
                 <button
                   type="button"
                   aria-pressed={entry.id === station?.id}
-                  aria-label={`${entry.name}, ${bikes} bikes`}
+                  aria-label={t.bikes(entry.name, bikes)}
                   className={`pin${bikes === 0 ? " pin--empty" : ""}`}
                   onClick={() => setPicked(entry.id)}
                 >
@@ -229,17 +302,17 @@ const Velib = () => {
         <div className="aside">
           {station ? (
             <div className="card">
-              <span className="tile__label">station</span>
+              <span className="tile__label">{t.station}</span>
               <span className="card__name">{station.name}</span>
               <div className="counts">
                 <div>
-                  Mechanical bikes <strong>{station.mechanical}</strong>
+                  {t.mechanicalBikes} <strong>{station.mechanical}</strong>
                 </div>
                 <div>
-                  E-bikes <strong>{station.ebike}</strong>
+                  {t.ebikes} <strong>{station.ebike}</strong>
                 </div>
                 <div>
-                  Free docks <strong>{station.docks}</strong>
+                  {t.docks} <strong>{station.docks}</strong>
                 </div>
               </div>
               <div aria-hidden="true" className="bar">
@@ -249,27 +322,24 @@ const Velib = () => {
               <div className="key">
                 <span>
                   <i style={{ background: "var(--moss)" }} />
-                  mechanical
+                  {t.mechanical}
                 </span>
                 <span>
                   <i style={{ background: "var(--focus)" }} />
-                  e-bike
+                  {t.ebike}
                 </span>
               </div>
             </div>
           ) : null}
           <p className="window__text window__text--hint">
-            Tap a pin to see its bikes and free docks. The number on each pin is
-            bikes available now
-            {data ? `, as of ${parisTime(new Date(data.updatedAt))}` : ""}.
+            {t.tapPin}
+            {data ? t.asOf(parisTime(new Date(data.updatedAt))) : ""}.
           </p>
         </div>
       </div>
     </AppWindow>
   );
 };
-
-const LABELS = { ok: "normal", warn: "disrupted", works: "works" } as const;
 
 const Traffic = ({ lines }: { lines: readonly TransitLine[] }) => {
   const { data, error } = useApi<TrafficReport>(
@@ -278,6 +348,8 @@ const Traffic = ({ lines }: { lines: readonly TransitLine[] }) => {
   );
 
   const [issuesOnly, setIssuesOnly] = useState(false);
+  const language = useLanguage();
+  const t = COPY[language];
   const statusOf = new Map(data?.lines.map((status) => [status.key, status]));
   const known = lines.filter((line) => statusOf.has(line.key));
   const issues = known.filter((line) => statusOf.get(line.key)?.level !== "ok");
@@ -289,17 +361,16 @@ const Traffic = ({ lines }: { lines: readonly TransitLine[] }) => {
         <p className="window__text">
           {data ? (
             <>
-              <strong>{issues.length}</strong>{" "}
-              {issues.length === 1 ? "line" : "lines"} with disruptions ·
-              updated {parisTime(new Date(data.updatedAt))}
+              <strong>{issues.length}</strong> {t.issues(issues.length)} ·{" "}
+              {t.updated(parisTime(new Date(data.updatedAt)))}
             </>
           ) : (
-            "Line status"
+            t.lineStatus
           )}
         </p>
         <div
           role="group"
-          aria-label="filter"
+          aria-label={t.filter}
           className="segmented segmented--fit"
         >
           <button
@@ -307,14 +378,14 @@ const Traffic = ({ lines }: { lines: readonly TransitLine[] }) => {
             aria-pressed={!issuesOnly}
             onClick={() => setIssuesOnly(false)}
           >
-            All lines
+            {t.allLines}
           </button>
           <button
             type="button"
             aria-pressed={issuesOnly}
             onClick={() => setIssuesOnly(true)}
           >
-            Issues only
+            {t.issuesOnly}
           </button>
         </div>
       </div>
@@ -328,18 +399,22 @@ const Traffic = ({ lines }: { lines: readonly TransitLine[] }) => {
               <div key={line.key} className="feed__row">
                 <LineBadge line={line} />
                 <div className="feed__text">
-                  <span className="feed__title">{line.title}</span>
-                  <span className="feed__detail">{status.detail}</span>
+                  <span className="feed__title">
+                    {lineTitle(line, language)}
+                  </span>
+                  <span className="feed__detail">
+                    {status.detail[language]}
+                  </span>
                 </div>
                 <span className={`status status--${status.level}`}>
-                  {LABELS[status.level]}
+                  {t.levels[status.level]}
                 </span>
               </div>
             ) : null;
           })}
           {shown.length === 0 ? (
             <div className="feed__row">
-              <span className="feed__detail">No disruptions on any line.</span>
+              <span className="feed__detail">{t.noDisruptions}</span>
             </div>
           ) : null}
         </div>
@@ -352,15 +427,13 @@ const Traffic = ({ lines }: { lines: readonly TransitLine[] }) => {
 export const TransportScreen = () => {
   const { data } = useApi<LinesReport>("/api/transport/lines");
   const lines = data?.lines ?? LINES;
+  const t = useCopy(COPY);
 
   return (
     <>
       <div className="content__head">
-        <h2 className="display page__title">Public transport</h2>
-        <p className="page__sub">
-          Next trains on every metro, RER and Transilien line, line status and
-          Vélib'.
-        </p>
+        <h2 className="display page__title">{t.title}</h2>
+        <p className="page__sub">{t.sub}</p>
       </div>
       <div className="row">
         <NextTrain key={data ? "live" : "static"} lines={lines} />

@@ -1,3 +1,5 @@
+import type { Language } from "../lib/language";
+
 /**
  * Every metro, RER and Transilien line, in the order the screen lists them.
  * PRIM gives each line's id and colours when it answers; these colours are
@@ -20,19 +22,25 @@ export interface TransitLine {
 const DARK = "#000000";
 const LIGHT = "#ffffff";
 
-const MODE_NAMES: Record<Mode, string> = {
-  metro: "Metro",
-  rer: "RER",
-  transilien: "Transilien",
-};
+const MODE_NAMES = {
+  en: { metro: "Metro", rer: "RER", transilien: "Transilien" },
+  fr: { metro: "Métro", rer: "RER", transilien: "Transilien" },
+} satisfies Record<Language, Record<Mode, string>>;
 
 export const MODES: readonly Mode[] = ["metro", "rer", "transilien"];
 
-export const modeName = (mode: Mode) => MODE_NAMES[mode];
+export const modeName = (mode: Mode, language: Language = "en") =>
+  MODE_NAMES[language][mode];
 
 /** "3B" → "3bis", as the signs write it. */
 export const shownCode = (code: string) =>
   code.replace(/^(?<number>\d+)B$/iu, "$<number>bis");
+
+/** "Metro 3bis" ("Métro 3bis" in French), as the screens name a line. */
+export const lineTitle = (
+  line: Pick<TransitLine, "mode" | "code">,
+  language: Language = "en"
+) => `${modeName(line.mode, language)} ${shownCode(line.code)}`;
 
 export const lineOf = (
   mode: Mode,

@@ -1,3 +1,6 @@
+import { LOCALES } from "./language";
+import type { Language } from "./language";
+
 /**
  * How the weather screen words and colours its numbers. The scales are the
  * WHO's for the UV index and the European Environment Agency's for the
@@ -17,32 +20,48 @@ export const UV_STEPS = [
   "var(--strong)",
 ];
 
-export const uvLevel = (uv: number): Level & { advice: string } => {
+/** The WHO's five UV levels, each with its label and advice, in each language. */
+const UV_LEVELS = {
+  en: [
+    { advice: "No sun protection needed", label: "low" },
+    { advice: "Sunglasses and sun cream at midday", label: "moderate" },
+    { advice: "Cover up, find shade at midday", label: "high" },
+    { advice: "Stay out of the midday sun", label: "very high" },
+    { advice: "Avoid the sun", label: "extreme" },
+  ],
+  fr: [
+    { advice: "Pas besoin de protection solaire", label: "faible" },
+    { advice: "Lunettes et crème solaire à midi", label: "modéré" },
+    { advice: "Couvrez-vous, cherchez l’ombre à midi", label: "élevé" },
+    { advice: "Évitez le soleil de midi", label: "très élevé" },
+    { advice: "Évitez le soleil", label: "extrême" },
+  ],
+};
+
+const uvStep = (uv: number) => {
   if (uv < 3) {
-    return { advice: "No sun protection needed", label: "low", step: 0 };
+    return 0;
   }
 
   if (uv < 6) {
-    return {
-      advice: "Sunglasses and sun cream at midday",
-      label: "moderate",
-      step: 1,
-    };
+    return 1;
   }
 
   if (uv < 8) {
-    return { advice: "Cover up, find shade at midday", label: "high", step: 2 };
+    return 2;
   }
 
-  if (uv < 11) {
-    return {
-      advice: "Stay out of the midday sun",
-      label: "very high",
-      step: 3,
-    };
-  }
+  return uv < 11 ? 3 : 4;
+};
 
-  return { advice: "Avoid the sun", label: "extreme", step: 4 };
+export const uvLevel = (
+  uv: number,
+  language: Language = "en"
+): Level & { advice: string } => {
+  const step = uvStep(uv);
+  const level = UV_LEVELS[language][step] ?? { advice: "", label: "" };
+
+  return { ...level, step };
 };
 
 export const AQI_STEPS = [
@@ -54,59 +73,83 @@ export const AQI_STEPS = [
   "var(--strong)",
 ];
 
-const AQI_LABELS = [
-  "good",
-  "fair",
-  "moderate",
-  "poor",
-  "very poor",
-  "extremely poor",
-];
-
-export const aqiLevel = (aqi: number): Level => {
-  const step = Math.min(5, Math.max(0, Math.ceil(aqi / 20) - 1));
-
-  return { label: AQI_LABELS[step] ?? "", step };
+/** The European AQI's six levels, as the EEA names them in each language. */
+export const AQI_LABELS = {
+  en: ["good", "fair", "moderate", "poor", "very poor", "extremely poor"],
+  fr: [
+    "bon",
+    "moyen",
+    "dégradé",
+    "mauvais",
+    "très mauvais",
+    "extrêmement mauvais",
+  ],
 };
 
-const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+export const aqiLevel = (aqi: number, language: Language = "en"): Level => {
+  const step = Math.min(5, Math.max(0, Math.ceil(aqi / 20) - 1));
 
-const COMPASS_WORDS = [
-  "north",
-  "north-east",
-  "east",
-  "south-east",
-  "south",
-  "south-west",
-  "west",
-  "north-west",
-];
+  return { label: AQI_LABELS[language][step] ?? "", step };
+};
+
+const COMPASS = {
+  en: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+  fr: ["N", "NE", "E", "SE", "S", "SO", "O", "NO"],
+};
+
+const COMPASS_WORDS = {
+  en: [
+    "north",
+    "north-east",
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west",
+  ],
+  fr: [
+    "nord",
+    "nord-est",
+    "est",
+    "sud-est",
+    "sud",
+    "sud-ouest",
+    "ouest",
+    "nord-ouest",
+  ],
+};
 
 const sector = (degrees: number) =>
   Math.round((((degrees % 360) + 360) % 360) / 45) % 8;
 
 /** Where the wind comes from: 225 → "SW". */
-export const compassOf = (degrees: number) => COMPASS[sector(degrees)] ?? "N";
+export const compassOf = (degrees: number, language: Language = "en") =>
+  COMPASS[language][sector(degrees)] ?? "N";
 
-export const compassWordOf = (degrees: number) =>
-  COMPASS_WORDS[sector(degrees)] ?? "north";
+export const compassWordOf = (degrees: number, language: Language = "en") =>
+  COMPASS_WORDS[language][sector(degrees)] ?? COMPASS_WORDS[language][0];
 
-const DAY = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC",
-  weekday: "short",
+const formats = (language: Language) => ({
+  date: new Intl.DateTimeFormat(LOCALES[language], {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }),
+  day: new Intl.DateTimeFormat(LOCALES[language], {
+    timeZone: "UTC",
+    weekday: "short",
+  }),
 });
 
-const DATE = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
+const DAY_FORMATS = { en: formats("en"), fr: formats("fr") };
 
-/** "2026-10-29" → "Thu" and "29 Oct". The dates are already Paris's. */
-export const dayOf = (date: string) => {
+/** "2026-10-29" → "Thu" and "29 Oct" ("jeu." and "29 oct." in French). The dates are already Paris's. */
+export const dayOf = (date: string, language: Language = "en") => {
   const at = new Date(`${date}T12:00:00Z`);
+  const format = DAY_FORMATS[language];
 
-  return { date: DATE.format(at), day: DAY.format(at) };
+  return { date: format.date.format(at), day: format.day.format(at) };
 };
 
 /** 597 → "9 h 57" */
@@ -118,7 +161,33 @@ export const durationOf = (minutes: number) =>
  * day from 0 to 1, and how long is left. Before sunrise and after sunset it
  * sits on the horizon.
  */
-export const sunAt = (minutes: number, sunrise: number, sunset: number) => {
+const SUN_WORDS = {
+  en: {
+    after: "after sunset",
+    before: "before sunrise",
+    daytime: "daytime",
+    left: (duration: string) => `${duration} of daylight left`,
+    rises: (duration: string) => `sunrise in ${duration}`,
+    set: "the sun has set",
+  },
+  fr: {
+    after: "après le coucher",
+    before: "avant le lever",
+    daytime: "en journée",
+    left: (duration: string) => `encore ${duration} de jour`,
+    rises: (duration: string) => `lever du soleil dans ${duration}`,
+    set: "le soleil est couché",
+  },
+};
+
+export const sunAt = (
+  minutes: number,
+  sunrise: number,
+  sunset: number,
+  language: Language = "en"
+) => {
+  const words = SUN_WORDS[language];
+
   const share = Math.max(
     0,
     Math.min(1, (minutes - sunrise) / (sunset - sunrise))
@@ -129,8 +198,8 @@ export const sunAt = (minutes: number, sunrise: number, sunset: number) => {
   if (minutes < sunrise) {
     return {
       share,
-      status: "before sunrise",
-      summary: `sunrise in ${durationOf(sunrise - minutes)}`,
+      status: words.before,
+      summary: words.rises(durationOf(sunrise - minutes)),
       up: false,
     };
   }
@@ -138,16 +207,16 @@ export const sunAt = (minutes: number, sunrise: number, sunset: number) => {
   if (left > 0) {
     return {
       share,
-      status: "daytime",
-      summary: `${durationOf(left)} of daylight left`,
+      status: words.daytime,
+      summary: words.left(durationOf(left)),
       up: true,
     };
   }
 
   return {
     share,
-    status: "after sunset",
-    summary: "the sun has set",
+    status: words.after,
+    summary: words.set,
     up: false,
   };
 };

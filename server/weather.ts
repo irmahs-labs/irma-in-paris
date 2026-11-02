@@ -1,6 +1,6 @@
 import * as z from "zod/mini";
 
-import type { SkyKind, WeatherReport } from "../src/lib/api";
+import type { Localized, SkyKind, WeatherReport } from "../src/lib/api";
 
 /** Paris, the Hôtel de Ville. */
 const LAT = 48.8566;
@@ -72,35 +72,35 @@ export const airAnswer = z.object({
 
 export interface Sky {
   sky: SkyKind;
-  label: string;
+  label: Localized;
 }
 
 /** The WMO codes Open-Meteo uses, by the first code of each group. */
 const GROUPS: readonly (readonly [number, number, Sky])[] = [
-  [45, 48, { label: "Fog", sky: "fog" }],
-  [51, 57, { label: "Drizzle", sky: "rain" }],
-  [61, 67, { label: "Rain", sky: "rain" }],
-  [71, 77, { label: "Snow", sky: "snow" }],
-  [80, 82, { label: "Showers", sky: "rain" }],
-  [85, 86, { label: "Snow", sky: "snow" }],
-  [95, 99, { label: "Thunderstorm", sky: "storm" }],
+  [45, 48, { label: { en: "Fog", fr: "Brouillard" }, sky: "fog" }],
+  [51, 57, { label: { en: "Drizzle", fr: "Bruine" }, sky: "rain" }],
+  [61, 67, { label: { en: "Rain", fr: "Pluie" }, sky: "rain" }],
+  [71, 77, { label: { en: "Snow", fr: "Neige" }, sky: "snow" }],
+  [80, 82, { label: { en: "Showers", fr: "Averses" }, sky: "rain" }],
+  [85, 86, { label: { en: "Snow", fr: "Neige" }, sky: "snow" }],
+  [95, 99, { label: { en: "Thunderstorm", fr: "Orage" }, sky: "storm" }],
 ];
 
 const CLEAR_DAY: readonly Sky[] = [
-  { label: "Sunny", sky: "sun" },
-  { label: "Mostly sunny", sky: "sun" },
-  { label: "Partly cloudy", sky: "part" },
-  { label: "Cloudy", sky: "cloud" },
+  { label: { en: "Sunny", fr: "Ensoleillé" }, sky: "sun" },
+  { label: { en: "Mostly sunny", fr: "Plutôt ensoleillé" }, sky: "sun" },
+  { label: { en: "Partly cloudy", fr: "Partiellement nuageux" }, sky: "part" },
+  { label: { en: "Cloudy", fr: "Nuageux" }, sky: "cloud" },
 ];
 
 const CLEAR_NIGHT: readonly Sky[] = [
-  { label: "Clear", sky: "moon" },
-  { label: "Mostly clear", sky: "moon" },
-  { label: "Partly cloudy", sky: "cloud" },
-  { label: "Cloudy", sky: "cloud" },
+  { label: { en: "Clear", fr: "Dégagé" }, sky: "moon" },
+  { label: { en: "Mostly clear", fr: "Plutôt dégagé" }, sky: "moon" },
+  { label: { en: "Partly cloudy", fr: "Partiellement nuageux" }, sky: "cloud" },
+  { label: { en: "Cloudy", fr: "Nuageux" }, sky: "cloud" },
 ];
 
-const CLOUDY: Sky = { label: "Cloudy", sky: "cloud" };
+const CLOUDY: Sky = { label: { en: "Cloudy", fr: "Nuageux" }, sky: "cloud" };
 
 /**
  * A WMO weather code as the screen draws and names it. Clear and mostly

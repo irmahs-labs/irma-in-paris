@@ -38,13 +38,25 @@ const AIR = airAnswer.parse({ current: { european_aqi: 34, pm2_5: 8.4 } });
 
 describe("skyOf", () => {
   it("names and draws the WMO codes", () => {
-    expect(skyOf(0)).toEqual({ label: "Sunny", sky: "sun" });
-    expect(skyOf(0, false)).toEqual({ label: "Clear", sky: "moon" });
-    expect(skyOf(2)).toEqual({ label: "Partly cloudy", sky: "part" });
+    expect(skyOf(0)).toEqual({
+      label: { en: "Sunny", fr: "Ensoleillé" },
+      sky: "sun",
+    });
+    expect(skyOf(0, false)).toEqual({
+      label: { en: "Clear", fr: "Dégagé" },
+      sky: "moon",
+    });
+    expect(skyOf(2)).toEqual({
+      label: { en: "Partly cloudy", fr: "Partiellement nuageux" },
+      sky: "part",
+    });
     expect(skyOf(3).sky).toBe("cloud");
     expect(skyOf(45).sky).toBe("fog");
     expect(skyOf(53).sky).toBe("rain");
-    expect(skyOf(81)).toEqual({ label: "Showers", sky: "rain" });
+    expect(skyOf(81)).toEqual({
+      label: { en: "Showers", fr: "Averses" },
+      sky: "rain",
+    });
     expect(skyOf(73).sky).toBe("snow");
     expect(skyOf(96).sky).toBe("storm");
     expect(skyOf(42).sky).toBe("cloud");
@@ -59,7 +71,7 @@ describe("toReport", () => {
       aqi: 34,
       feelsLike: 9,
       humidity: 84,
-      label: "Clear",
+      label: { en: "Clear", fr: "Dégagé" },
       sky: "moon",
       temp: 10,
       windFrom: 267,
@@ -71,7 +83,7 @@ describe("toReport", () => {
     ]);
     expect(report.days[1]).toMatchObject({
       hi: 15,
-      label: "Rain",
+      label: { en: "Rain", fr: "Pluie" },
       lo: 8,
       rain: 70,
       sky: "rain",

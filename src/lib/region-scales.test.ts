@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { TownNow } from "./api";
-import { LAYERS, SCALES, bandOf, shown } from "./region-scales";
+import {
+  LAYERS,
+  SCALES,
+  bandLabel,
+  bandOf,
+  scaleName,
+  shown,
+} from "./region-scales";
 
 const PARIS: TownNow = {
   aqi: 45,
@@ -39,5 +46,17 @@ describe("the map's scales", () => {
     expect(shown("humidity", PARIS)).toBe("56%");
     expect(shown("wind", PARIS)).toBe("3 km/h");
     expect(shown("pollution", { ...PARIS, aqi: null })).toBe("–");
+  });
+});
+
+describe("scales in French", () => {
+  it("names each scale and band in French, band for band", () => {
+    expect(scaleName("pollution", "fr")).toBe("Pollution de l’air");
+    expect(bandLabel("temperature", bandOf("temperature", 31), "fr")).toBe(
+      "25° et plus"
+    );
+    expect(bandLabel("wind", bandOf("wind", 3), "en")).toBe(
+      "calm, under 10 km/h"
+    );
   });
 });

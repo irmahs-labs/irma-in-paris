@@ -1,4 +1,5 @@
 import type { ApiError, Photo, PickedPlace, Place, Suggestion } from "./api";
+import { currentLanguage } from "./language";
 import { LARGE_SIDE, THUMB_SIDE, shrink } from "./resize";
 
 /** What the add-a-place form sends: the restaurant is Google's, by its id. */
@@ -10,25 +11,52 @@ export interface PlaceForm {
   dish: string;
 }
 
-const REASONS = new Map(
-  Object.entries({
-    admin: "Only admins can change places. Sign in with an admin account.",
-    "already-added": "That restaurant is already on the map.",
-    cuisine: "Pick a cuisine from the menu.",
-    date: "The date does not look right.",
-    google: "Google Maps is not answering. Try again in a minute.",
-    "no-google-key": "Adding restaurants needs the server's Google Maps key.",
-    "not-a-restaurant": "Google Maps does not list that as somewhere to eat.",
-    origin: "That came from another site, so it was refused.",
-    photo: "That photo could not be read. Try a JPEG or PNG.",
-    place: "Pick a restaurant from the list first.",
-    "slow-down": "That's a lot of searching. Wait a minute and try again.",
-    "too-big": "That photo is too big.",
-  })
-);
+const REASONS = {
+  en: new Map(
+    Object.entries({
+      admin: "Only admins can change places. Sign in with an admin account.",
+      "already-added": "That restaurant is already on the map.",
+      cuisine: "Pick a cuisine from the menu.",
+      date: "The date does not look right.",
+      google: "Google Maps is not answering. Try again in a minute.",
+      "no-google-key": "Adding restaurants needs the server's Google Maps key.",
+      "not-a-restaurant": "Google Maps does not list that as somewhere to eat.",
+      origin: "That came from another site, so it was refused.",
+      photo: "That photo could not be read. Try a JPEG or PNG.",
+      place: "Pick a restaurant from the list first.",
+      "slow-down": "That's a lot of searching. Wait a minute and try again.",
+      "too-big": "That photo is too big.",
+    })
+  ),
+  fr: new Map(
+    Object.entries({
+      admin:
+        "Seuls les admins peuvent modifier les lieux. Connectez-vous avec un compte admin.",
+      "already-added": "Ce restaurant est déjà sur la carte.",
+      cuisine: "Choisissez une cuisine dans le menu.",
+      date: "La date ne semble pas correcte.",
+      google: "Google Maps ne répond pas. Réessayez dans une minute.",
+      "no-google-key":
+        "Ajouter des restaurants demande la clé Google Maps du serveur.",
+      "not-a-restaurant":
+        "Google Maps ne le classe pas parmi les endroits où manger.",
+      origin: "Cela venait d’un autre site, c’est donc refusé.",
+      photo: "Cette photo n’a pas pu être lue. Essayez un JPEG ou un PNG.",
+      place: "Choisissez d’abord un restaurant dans la liste.",
+      "slow-down":
+        "Ça fait beaucoup de recherches. Attendez une minute et réessayez.",
+      "too-big": "Cette photo est trop grande.",
+    })
+  ),
+};
 
-export const reasonOf = (error: string) =>
-  REASONS.get(error) ?? "Something went wrong. Try again.";
+const FAILED = {
+  en: "Something went wrong. Try again.",
+  fr: "Une erreur est survenue. Réessayez.",
+};
+
+export const reasonOf = (error: string, language = currentLanguage()) =>
+  REASONS[language].get(error) ?? FAILED[language];
 
 const send = async <T>(path: string, init: RequestInit): Promise<T> => {
   const response = await fetch(path, init);

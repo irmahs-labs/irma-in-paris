@@ -3,23 +3,105 @@ import type { FormEvent } from "react";
 
 import { AppWindow } from "../components/app-window";
 import { LazyMap } from "../components/lazy-map";
-import { CUISINES } from "../data/cuisines";
+import { CUISINES, cuisineName } from "../data/cuisines";
 import * as admin from "../lib/admin";
 import type { Me, Photo, PickedPlace, Place, Suggestion } from "../lib/api";
 import { Icon } from "../lib/icon";
+import { LOCALES, useCopy, useLanguage } from "../lib/language";
+import type { Language } from "../lib/language";
 import { useApi } from "../lib/use-api";
 import { useConfirm } from "../lib/use-confirm";
 
-const VISITED = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-  year: "numeric",
-});
+const COPY = {
+  en: {
+    add: "add place",
+    addAPhoto: "Add a photo",
+    addPhoto: "add photo",
+    adding: "adding…",
+    caption: "Caption",
+    change: "change",
+    close: "close",
+    cuisine: "Cuisine",
+    failed: "The places could not be loaded just now.",
+    map: "Map of the restaurants",
+    noPlaces: (canAdd: boolean) =>
+      `No places yet${canAdd ? ": add the first one below." : "."}`,
+    noRestaurant: "No restaurant by that name on Google Maps.",
+    openMaps: "open in Google Maps",
+    openPhoto: (caption: string) =>
+      caption ? `Open photo: ${caption}` : "Open photo",
+    photo: "Photo",
+    photosOf: (name: string) => `Photos of ${name}`,
+    pickOne: "Pick one",
+    removePhoto: "Remove this photo",
+    removePlace: (name: string) => `remove ${name}`,
+    restaurant: "Restaurant",
+    restaurantLabel: "restaurant",
+    restaurants: "restaurants",
+    search: "Search Google Maps by name",
+    selected: "selected",
+    sub: "Restaurants I've eaten at in Paris. Tap a pin or a name.",
+    sure: "sure?",
+    sureAgain: "sure? press again",
+    surePhoto: "Sure? Press again to remove this photo",
+    title: "Places I've been",
+    uploading: "uploading…",
+    visited: (date: string) => `Visited ${date}`,
+    visitedOn: "Visited on",
+    whatIAte: "What I ate",
+  },
+  fr: {
+    add: "ajouter le lieu",
+    addAPhoto: "Ajouter une photo",
+    addPhoto: "ajouter la photo",
+    adding: "ajout…",
+    caption: "Légende",
+    change: "changer",
+    close: "fermer",
+    cuisine: "Cuisine",
+    failed: "Les lieux n’ont pas pu être chargés pour le moment.",
+    map: "Carte des restaurants",
+    noPlaces: (canAdd: boolean) =>
+      `Pas encore de lieux${canAdd ? " : ajoutez le premier ci-dessous." : "."}`,
+    noRestaurant: "Aucun restaurant de ce nom sur Google Maps.",
+    openMaps: "ouvrir dans Google Maps",
+    openPhoto: (caption: string) =>
+      caption ? `Ouvrir la photo : ${caption}` : "Ouvrir la photo",
+    photo: "Photo",
+    photosOf: (name: string) => `Photos de ${name}`,
+    pickOne: "Choisir",
+    removePhoto: "Retirer cette photo",
+    removePlace: (name: string) => `retirer ${name}`,
+    restaurant: "Restaurant",
+    restaurantLabel: "restaurant",
+    restaurants: "restaurants",
+    search: "Chercher sur Google Maps par nom",
+    selected: "sélection",
+    sub: "Les restaurants où j’ai mangé à Paris. Touchez une épingle ou un nom.",
+    sure: "sûr ?",
+    sureAgain: "sûr ? appuyez encore",
+    surePhoto: "Sûr ? Appuyez encore pour retirer cette photo",
+    title: "Où j’ai mangé",
+    uploading: "envoi…",
+    visited: (date: string) => `Visité le ${date}`,
+    visitedOn: "Visité le",
+    whatIAte: "Ce que j’ai mangé",
+  },
+};
 
-/** "2026-10-12" → "12 October 2026" */
-const visitedOf = (date: string | null) =>
-  date ? VISITED.format(new Date(`${date}T12:00:00Z`)) : "";
+const visitedFormat = (language: Language) =>
+  new Intl.DateTimeFormat(LOCALES[language], {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+    year: "numeric",
+  });
+
+const VISITED = { en: visitedFormat("en"), fr: visitedFormat("fr") };
+
+/** "2026-10-12" → "12 October 2026" ("12 octobre 2026") */
+const visitedOf = (date: string | null, language: Language) =>
+  date ? VISITED[language].format(new Date(`${date}T12:00:00Z`)) : "";
 
 const photoUrl = (photo: Photo, size: "large" | "thumb") =>
   `/api/photos/${photo.id}/${size}`;
@@ -33,6 +115,7 @@ const Viewer = ({
   onClose: () => void;
 }) => {
   const dialog = useRef<HTMLDialogElement>(null);
+  const t = useCopy(COPY);
 
   useEffect(() => {
     if (photo) {
@@ -46,7 +129,7 @@ const Viewer = ({
     <dialog
       ref={dialog}
       className="viewer"
-      aria-label={photo?.caption || "Photo"}
+      aria-label={photo?.caption || t.photo}
       onClose={onClose}
       onClick={(event) => {
         if (event.target === dialog.current) {
@@ -66,7 +149,7 @@ const Viewer = ({
             <span>{photo.caption}</span>
             <button type="button" className="btn btn--pill" onClick={onClose}>
               <Icon name="close" size={16} />
-              close
+              {t.close}
             </button>
           </div>
         </div>
@@ -95,6 +178,10 @@ const RestaurantSearch = ({
   const [problem, setProblem] = useState("");
   const [busy, setBusy] = useState(false);
   const listId = useId();
+  const t = useCopy(COPY);
+  // Read inside the search effect without asking Google again on a switch
+  const noRestaurant = useRef(t.noRestaurant);
+  noRestaurant.current = t.noRestaurant;
 
   useEffect(() => {
     const typed = query.trim();
@@ -113,11 +200,7 @@ const RestaurantSearch = ({
 
         if (alive) {
           setSuggestions(found);
-          setProblem(
-            found.length === 0
-              ? "No restaurant by that name on Google Maps."
-              : ""
-          );
+          setProblem(found.length === 0 ? noRestaurant.current : "");
         }
       } catch (error) {
         if (alive) {
@@ -150,7 +233,7 @@ const RestaurantSearch = ({
   return (
     <div className="search">
       <label>
-        Restaurant
+        {t.restaurant}
         <input
           className="field"
           type="search"
@@ -159,7 +242,7 @@ const RestaurantSearch = ({
           aria-controls={listId}
           aria-autocomplete="list"
           autoComplete="off"
-          placeholder="Search Google Maps by name"
+          placeholder={t.search}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -203,6 +286,8 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
   const [dish, setDish] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
+  const language = useLanguage();
+  const t = COPY[language];
 
   const choose = (place: PickedPlace) => {
     setChosen(place);
@@ -246,7 +331,7 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
       <form className="form" onSubmit={submit}>
         {chosen ? (
           <div className="chosen">
-            <span className="tile__label">restaurant</span>
+            <span className="tile__label">{t.restaurantLabel}</span>
             <span className="selected__name">{chosen.name}</span>
             <span>{chosen.address}</span>
             <button
@@ -254,7 +339,7 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
               className="btn btn--pill"
               onClick={() => setChosen(null)}
             >
-              change
+              {t.change}
             </button>
           </div>
         ) : (
@@ -262,7 +347,7 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
         )}
         <div className="form__grid">
           <label>
-            Cuisine
+            {t.cuisine}
             <select
               className="field"
               required
@@ -270,17 +355,17 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
               onChange={(event) => setCuisine(event.target.value)}
             >
               <option value="" disabled>
-                Pick one
+                {t.pickOne}
               </option>
               {CUISINES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {cuisineName(option, language)}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Visited on
+            {t.visitedOn}
             <input
               className="field"
               type="date"
@@ -289,7 +374,7 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
             />
           </label>
           <label>
-            What I ate
+            {t.whatIAte}
             <input
               className="field"
               maxLength={120}
@@ -305,7 +390,7 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
             disabled={busy || !chosen || !cuisine}
           >
             <Icon name="plus" size={16} />
-            {busy ? "adding…" : "add place"}
+            {busy ? t.adding : t.add}
           </button>
           <p className="form__error" role="status">
             {problem}
@@ -329,6 +414,7 @@ const AddPhoto = ({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const t = useCopy(COPY);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -358,7 +444,7 @@ const AddPhoto = ({
   return (
     <form className="form" onSubmit={submit}>
       <label>
-        Add a photo
+        {t.addAPhoto}
         <input
           ref={input}
           className="file"
@@ -368,7 +454,7 @@ const AddPhoto = ({
         />
       </label>
       <label>
-        Caption
+        {t.caption}
         <input
           className="field"
           maxLength={120}
@@ -383,7 +469,7 @@ const AddPhoto = ({
           disabled={!file || busy}
         >
           <Icon name="plus" size={16} />
-          {busy ? "uploading…" : "add photo"}
+          {busy ? t.uploading : t.addPhoto}
         </button>
         <p className="form__error" role="status">
           {problem}
@@ -403,6 +489,8 @@ export const PlacesScreen = () => {
   const [problem, setProblem] = useState("");
   const { armed, press } = useConfirm();
   const isAdmin = me?.admin === true;
+  const language = useLanguage();
+  const t = COPY[language];
 
   useEffect(() => {
     if (data) {
@@ -445,18 +533,14 @@ export const PlacesScreen = () => {
   return (
     <>
       <div className="content__head">
-        <h2 className="display page__title">Places I've been</h2>
-        <p className="page__sub">
-          Restaurants I've eaten at in Paris. Tap a pin or a name.
-        </p>
+        <h2 className="display page__title">{t.title}</h2>
+        <p className="page__sub">{t.sub}</p>
       </div>
       <AppWindow title="places_ive_been.map" size="full">
-        {error && !data ? (
-          <p className="notice">The places could not be loaded just now.</p>
-        ) : null}
+        {error && !data ? <p className="notice">{t.failed}</p> : null}
         <div className="split">
           <LazyMap
-            label="Map of the restaurants"
+            label={t.map}
             focus={picked}
             markers={places.map((entry, i) => ({
               id: entry.id,
@@ -477,11 +561,9 @@ export const PlacesScreen = () => {
             }))}
           />
           <fieldset className="panel places">
-            <legend className="legend">restaurants</legend>
+            <legend className="legend">{t.restaurants}</legend>
             {data && places.length === 0 ? (
-              <p className="hint">
-                No places yet{isAdmin ? ": add the first one below." : "."}
-              </p>
+              <p className="hint">{t.noPlaces(isAdmin)}</p>
             ) : null}
             <ul className="places__list">
               {places.map((entry, i) => (
@@ -498,7 +580,7 @@ export const PlacesScreen = () => {
                     <span className="place-row__text">
                       <span className="place-row__name">{entry.name}</span>
                       <span className="place-row__more">
-                        {[entry.area, entry.cuisine]
+                        {[entry.area, cuisineName(entry.cuisine, language)]
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
@@ -509,16 +591,16 @@ export const PlacesScreen = () => {
             </ul>
             {place ? (
               <div className="selected">
-                <span className="tile__label">selected</span>
+                <span className="tile__label">{t.selected}</span>
                 <span className="selected__name">{place.name}</span>
                 <span>{place.address}</span>
                 <span>
-                  {place.cuisine}
+                  {cuisineName(place.cuisine, language)}
                   {place.mapsUrl ? (
                     <>
                       {" · "}
                       <a href={place.mapsUrl} target="_blank" rel="noreferrer">
-                        open in Google Maps
+                        {t.openMaps}
                       </a>
                     </>
                   ) : null}
@@ -527,7 +609,7 @@ export const PlacesScreen = () => {
                   <span>
                     {[
                       place.visitedOn
-                        ? `Visited ${visitedOf(place.visitedOn)}`
+                        ? t.visited(visitedOf(place.visitedOn, language))
                         : "",
                       place.dish,
                     ]
@@ -536,17 +618,13 @@ export const PlacesScreen = () => {
                   </span>
                 ) : null}
                 {place.photos.length > 0 ? (
-                  <ul className="photos" aria-label={`Photos of ${place.name}`}>
+                  <ul className="photos" aria-label={t.photosOf(place.name)}>
                     {place.photos.map((photo) => (
                       <li key={photo.id}>
                         <button
                           type="button"
                           className="photo"
-                          aria-label={
-                            photo.caption
-                              ? `Open photo: ${photo.caption}`
-                              : "Open photo"
-                          }
+                          aria-label={t.openPhoto(photo.caption)}
                           onClick={() => setViewing(photo)}
                         >
                           <img
@@ -560,16 +638,14 @@ export const PlacesScreen = () => {
                             type="button"
                             className="btn btn--pill btn--danger photo__remove"
                             aria-label={
-                              armed === photo.id
-                                ? "Sure? Press again to remove this photo"
-                                : "Remove this photo"
+                              armed === photo.id ? t.surePhoto : t.removePhoto
                             }
                             onClick={() =>
                               press(photo.id, () => deletePhoto(place, photo))
                             }
                           >
                             {armed === photo.id ? (
-                              "sure?"
+                              t.sure
                             ) : (
                               <Icon name="trash" size={16} />
                             )}
@@ -600,8 +676,8 @@ export const PlacesScreen = () => {
                     >
                       <Icon name="trash" size={16} />
                       {armed === `place-${place.id}`
-                        ? "sure? press again"
-                        : `remove ${place.name}`}
+                        ? t.sureAgain
+                        : t.removePlace(place.name)}
                     </button>
                     <p className="form__error" role="status">
                       {problem}

@@ -31,6 +31,17 @@
         document.documentElement.dataset.theme = "light";
       }
     </script>
+    <!-- The language, English or French, shared by every irmahs.dev app:
+         src/lib/language.ts keeps it. -->
+    <script>
+      try {
+        var lang =
+          (document.cookie.match(/(?:^|; )lang=(en|fr)(?:;|$)/) || [])[1] ||
+          localStorage.getItem("lang");
+        if (lang === "en" || lang === "fr")
+          document.documentElement.lang = lang;
+      } catch (e) {}
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>%APP_NAME%</title>
     <meta

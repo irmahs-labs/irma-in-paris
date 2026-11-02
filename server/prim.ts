@@ -2,7 +2,13 @@ import * as z from "zod/mini";
 
 import { LINES, lineOf, lineOrder } from "../src/data/lines";
 import type { Mode, TransitLine } from "../src/data/lines";
-import type { Departures, LineLevel, LineStatus, Stop } from "../src/lib/api";
+import type {
+  Departures,
+  LineLevel,
+  LineStatus,
+  Localized,
+  Stop,
+} from "../src/lib/api";
 
 /**
  * Île-de-France Mobilités' PRIM, through its Navitia API: the metro, RER
@@ -263,38 +269,51 @@ export const lineReportsAnswer = z.object({
 });
 
 /** Each effect that changes a journey, in words; elevators out of order and notices are left out. */
-const EFFECTS = new Map([
-  ["NO_SERVICE", "No trains"],
-  ["REDUCED_SERVICE", "Fewer trains"],
-  ["SIGNIFICANT_DELAYS", "Delays"],
-  ["DETOUR", "Trains diverted"],
-  ["MODIFIED_SERVICE", "Changed service"],
-  ["STOP_MOVED", "Stop moved"],
+const EFFECTS = new Map<string, Localized>([
+  ["NO_SERVICE", { en: "No trains", fr: "Trafic interrompu" }],
+  ["REDUCED_SERVICE", { en: "Fewer trains", fr: "Trafic réduit" }],
+  ["SIGNIFICANT_DELAYS", { en: "Delays", fr: "Retards" }],
+  ["DETOUR", { en: "Trains diverted", fr: "Trains déviés" }],
+  ["MODIFIED_SERVICE", { en: "Changed service", fr: "Service modifié" }],
+  ["STOP_MOVED", { en: "Stop moved", fr: "Arrêt déplacé" }],
 ]);
+
+const DISRUPTED: Localized = { en: "Disrupted", fr: "Trafic perturbé" };
 
 const isWorks = (item: Disruption) =>
   /travaux|works/iu.test(item.cause ?? "") ||
   (item.tags ?? []).some((tag) => /travaux|works/iu.test(tag));
 
-const WEEKDAY = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-  weekday: "short",
-});
+const weekday = (locale: string) =>
+  new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    weekday: "short",
+  });
 
-/** When a disruption that has not started yet starts: "from 22:30 today", "from Mon 3 Nov". */
-const startOf = (item: Disruption, now: Date) => {
+const WEEKDAYS = { en: weekday("en-GB"), fr: weekday("fr-FR") };
+
+const NO_START: Localized = { en: "", fr: "" };
+
+/**
+ * When a disruption that has not started yet starts: "from 22:30 today",
+ * "from Mon 3 Nov", or in French "à partir de 22:30 aujourd’hui".
+ */
+const startOf = (item: Disruption, now: Date): Localized => {
   const begin = item.application_periods?.[0]?.begin;
 
   if (item.status !== "future" || !begin) {
-    return "";
+    return NO_START;
   }
 
   const clock = `${begin.slice(9, 11)}:${begin.slice(11, 13)}`;
 
   if (begin.slice(0, 8) === parisStamp(now).slice(0, 8)) {
-    return ` from ${clock} today`;
+    return {
+      en: ` from ${clock} today`,
+      fr: ` à partir de ${clock} aujourd’hui`,
+    };
   }
 
   const day = new Date(
@@ -305,16 +324,23 @@ const startOf = (item: Disruption, now: Date) => {
     )
   );
 
-  return ` from ${WEEKDAY.format(day).replace(",", "")}, ${clock}`;
+  return {
+    en: ` from ${WEEKDAYS.en.format(day).replace(",", "")}, ${clock}`,
+    fr: ` à partir du ${WEEKDAYS.fr.format(day)}, ${clock}`,
+  };
 };
 
 /**
- * A disruption in English, from PRIM's structured fields rather than its
- * French text: what happens, where, and when it starts if it has not yet.
+ * A disruption in English and in French, from PRIM's structured fields
+ * rather than its own French text, so both read the same: what happens,
+ * where, and when it starts if it has not yet.
  * "Works: No trains between La Défense and Nanterre-Préfecture from 22:30 today".
  */
-export const describe = (item: Disruption, now: Date = new Date()) => {
-  const effect = EFFECTS.get(item.severity?.effect ?? "") ?? "Disrupted";
+export const describe = (
+  item: Disruption,
+  now: Date = new Date()
+): Localized => {
+  const effect = EFFECTS.get(item.severity?.effect ?? "") ?? DISRUPTED;
 
   const section = item.impacted_objects?.find(
     (object) => object.impacted_section
@@ -322,13 +348,14 @@ export const describe = (item: Disruption, now: Date = new Date()) => {
 
   const from = section?.from?.name;
   const to = section?.to?.name;
+  const between = from && to && from !== to;
+  const start = startOf(item, now);
+  const works = isWorks(item);
 
-  const where =
-    from && to && from !== to
-      ? ` between ${terminusName(from)} and ${terminusName(to)}`
-      : "";
-
-  return `${isWorks(item) ? "Works: " : ""}${effect}${where}${startOf(item, now)}`;
+  return {
+    en: `${works ? "Works: " : ""}${effect.en}${between ? ` between ${terminusName(from)} and ${terminusName(to)}` : ""}${start.en}`,
+    fr: `${works ? "Travaux : " : ""}${effect.fr}${between ? ` entre ${terminusName(from)} et ${terminusName(to)}` : ""}${start.fr}`,
+  };
 };
 
 /** Whether a future disruption begins within the next day. */
@@ -368,7 +395,10 @@ const matters = (item: Disruption, now: Date) =>
   (item.status === "active" ||
     (item.status === "future" && isWorks(item) && beginsSoon(item, now)));
 
-const NORMAL = "Traffic normal on the whole line";
+const NORMAL: Localized = {
+  en: "Traffic normal on the whole line",
+  fr: "Trafic normal sur l’ensemble de la ligne",
+};
 
 /**
  * Every line's status from one mode's line reports: disrupted while

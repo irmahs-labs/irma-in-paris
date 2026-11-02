@@ -1,3 +1,5 @@
+import type { Language } from "../lib/language";
+
 /**
  * The cuisines a place can be filed under, in the order the menu lists
  * them: broad families first, then by country, then the rest.
@@ -33,6 +35,37 @@ export const CUISINES = [
 ] as const;
 
 export type Cuisine = (typeof CUISINES)[number];
+
+/** Each cuisine as the French menu names it; the stored value stays English. */
+export const CUISINES_FR: Record<Cuisine, string> = {
+  African: "Africaine",
+  American: "Américaine",
+  Asian: "Asiatique",
+  Bakery: "Boulangerie",
+  Brazilian: "Brésilienne",
+  Café: "Café",
+  Cambodian: "Cambodgienne",
+  Chinese: "Chinoise",
+  European: "Européenne",
+  French: "Française",
+  Fusion: "Fusion",
+  Greek: "Grecque",
+  Indian: "Indienne",
+  Italian: "Italienne",
+  Japanese: "Japonaise",
+  Korean: "Coréenne",
+  Latino: "Latino",
+  Lebanese: "Libanaise",
+  Mexican: "Mexicaine",
+  "Middle Eastern": "Moyen-Orient",
+  Other: "Autre",
+  Peruvian: "Péruvienne",
+  Seafood: "Fruits de mer",
+  Spanish: "Espagnole",
+  Thai: "Thaïe",
+  Vegetarian: "Végétarienne",
+  Vietnamese: "Vietnamienne",
+};
 
 const NAMES: ReadonlySet<string> = new Set(CUISINES);
 
@@ -84,3 +117,7 @@ export const cuisineOf = (googleTypes: readonly string[]): Cuisine | null => {
 
   return null;
 };
+
+/** A cuisine's name in the page's language; one it doesn't know reads as it is. */
+export const cuisineName = (value: string, language: Language) =>
+  language === "fr" && isCuisine(value) ? CUISINES_FR[value] : value;

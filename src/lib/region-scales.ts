@@ -1,4 +1,5 @@
-import type { TownNow } from "./api";
+import type { PollenKind, TownNow } from "./api";
+import type { Language } from "./language";
 
 /**
  * The five things the Île-de-France map can show, each with its own scale.
@@ -109,6 +110,88 @@ export const SCALES: Record<Layer, Scale> = {
     name: "Wind",
     unit: " km/h",
     value: (town) => town.windKmh,
+  },
+};
+
+/** Each scale's name and its bands' labels in French, band for band. */
+const FRENCH: Record<Layer, { name: string; bands: readonly string[] }> = {
+  humidity: {
+    bands: ["moins de 40 %", "40–55 %", "55–70 %", "70–85 %", "85 % et plus"],
+    name: "Humidité",
+  },
+  pollen: {
+    bands: ["aucun", "faible", "modéré", "élevé", "très élevé"],
+    name: "Pollen",
+  },
+  pollution: {
+    bands: [
+      "bon",
+      "moyen",
+      "dégradé",
+      "mauvais",
+      "très mauvais",
+      "extrêmement mauvais",
+    ],
+    name: "Pollution de l’air",
+  },
+  temperature: {
+    bands: [
+      "moins de 0°",
+      "0–5°",
+      "5–10°",
+      "10–15°",
+      "15–20°",
+      "20–25°",
+      "25° et plus",
+    ],
+    name: "Température",
+  },
+  wind: {
+    bands: [
+      "calme, moins de 10 km/h",
+      "10–20 km/h",
+      "20–30 km/h",
+      "30–45 km/h",
+      "45 km/h et plus",
+    ],
+    name: "Vent",
+  },
+};
+
+/** A scale's name in the page's language. */
+export const scaleName = (layer: Layer, language: Language = "en") =>
+  language === "fr" ? FRENCH[layer].name : SCALES[layer].name;
+
+/** A band's label in the page's language. */
+export const bandLabel = (
+  layer: Layer,
+  entry: Band,
+  language: Language = "en"
+) => {
+  const index = SCALES[layer].bands.indexOf(entry);
+
+  return language === "fr"
+    ? (FRENCH[layer].bands[index] ?? entry.label)
+    : entry.label;
+};
+
+/** The pollen counted, by its plant's name in each language. */
+export const POLLEN_NAMES: Record<Language, Record<PollenKind, string>> = {
+  en: {
+    alder: "alder",
+    birch: "birch",
+    grass: "grass",
+    mugwort: "mugwort",
+    olive: "olive",
+    ragweed: "ragweed",
+  },
+  fr: {
+    alder: "aulne",
+    birch: "bouleau",
+    grass: "graminées",
+    mugwort: "armoise",
+    olive: "olivier",
+    ragweed: "ambroisie",
   },
 };
 
