@@ -32,6 +32,8 @@ Adding a restaurant means searching for it by name and picking it from Google Ma
 
 Without it the places still show; the add form says it needs the key.
 
+If the add form says Google Maps refused the server's key, Google turned the key down: check steps 1 and 2 (the API enabled, billing on, no website or IP restriction that leaves the server out). The server logs Google's own reason: `docker compose -f compose.prod.yaml logs app | grep Google` in `/srv/irma-in-paris`.
+
 ## Local development
 
 Needs Node 22.18+ and Docker.

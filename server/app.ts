@@ -22,6 +22,7 @@ import type {
   WeatherReport,
 } from "../src/lib/api";
 import { createCache } from "./cache";
+import { GoogleKeyRefusedError } from "./google-places";
 import type { GooglePlace, GooglePlaces } from "./google-places";
 import { createLimiter } from "./limiter";
 import { serveRanges } from "./map-file";
@@ -99,9 +100,23 @@ const MAX_SIDE = { large: 2048, thumb: 640 } as const;
 
 const fail = (
   c: Context,
-  status: 400 | 403 | 404 | 409 | 422 | 429 | 502 | 503,
+  status: 400 | 403 | 404 | 409 | 422 | 429 | 503,
   error: string
 ) => c.json({ error } satisfies ApiError, status);
+
+/**
+ * An outside API that did not answer as it should. 503, not 502: Cloudflare,
+ * in front of the site, swaps an origin's 502 for its own "error code: 502"
+ * text, and the page would lose the reason.
+ */
+const upstreamFailed = (c: Context, error: string) => fail(c, 503, error);
+
+/**
+ * What to tell the admin when Google said no: "google-key" when it refused
+ * the key itself, which only fixing the key in Google Cloud mends.
+ */
+const googleReason = (keyRefused: boolean) =>
+  keyRefused ? "google-key" : "google";
 
 /**
  * The server's routes: the weather, Vélib' and PRIM's transport, asked of
@@ -197,7 +212,7 @@ export const createApp = ({
     } catch (error) {
       console.error("Weather", error);
 
-      return fail(c, 502, "weather");
+      return upstreamFailed(c, "weather");
     }
   });
 
@@ -207,7 +222,7 @@ export const createApp = ({
     } catch (error) {
       console.error("Île-de-France weather", error);
 
-      return fail(c, 502, "region");
+      return upstreamFailed(c, "region");
     }
   });
 
@@ -217,7 +232,7 @@ export const createApp = ({
     } catch (error) {
       console.error("Vélib'", error);
 
-      return fail(c, 502, "velib");
+      return upstreamFailed(c, "velib");
     }
   });
 
@@ -273,7 +288,7 @@ export const createApp = ({
     } catch (error) {
       console.error("PRIM stops", error);
 
-      return fail(c, 502, "prim");
+      return upstreamFailed(c, "prim");
     }
   });
 
@@ -292,7 +307,7 @@ export const createApp = ({
     } catch (error) {
       console.error("PRIM line status", error);
 
-      return fail(c, 502, "prim");
+      return upstreamFailed(c, "prim");
     }
   });
 
@@ -318,7 +333,7 @@ export const createApp = ({
     } catch (error) {
       console.error("PRIM departures", error);
 
-      return fail(c, 502, "prim");
+      return upstreamFailed(c, "prim");
     }
   });
 
@@ -372,7 +387,10 @@ export const createApp = ({
     } catch (error) {
       console.error("Google Places search", error);
 
-      return fail(c, 502, "google");
+      return upstreamFailed(
+        c,
+        googleReason(error instanceof GoogleKeyRefusedError)
+      );
     }
   });
 
@@ -406,7 +424,10 @@ export const createApp = ({
     } catch (error) {
       console.error("Google Places details", error);
 
-      return fail(c, 502, "google");
+      return upstreamFailed(
+        c,
+        googleReason(error instanceof GoogleKeyRefusedError)
+      );
     }
   });
 
@@ -444,7 +465,10 @@ export const createApp = ({
     } catch (error) {
       console.error("Google Places details", error);
 
-      return fail(c, 502, "google");
+      return upstreamFailed(
+        c,
+        googleReason(error instanceof GoogleKeyRefusedError)
+      );
     }
 
     if (!found) {

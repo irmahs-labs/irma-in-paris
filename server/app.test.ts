@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Place } from "../src/lib/api";
 import { createApp } from "./app";
 import { fakeJpeg } from "./fixtures/jpeg";
+import { GoogleKeyRefusedError } from "./google-places";
 import type { GooglePlace, GooglePlaces } from "./google-places";
 import type { NewPhoto, NewPlace } from "./places";
 import type { Prim, PrimLine } from "./prim";
@@ -53,7 +54,13 @@ const google: GooglePlaces = {
 };
 
 /** A fresh app over in-memory stand-ins for the database, Garage and the APIs. */
-const setUp = ({ prim = null }: { prim?: Prim | null } = {}) => {
+const setUp = ({
+  prim = null,
+  places = google,
+}: {
+  prim?: Prim | null;
+  places?: GooglePlaces;
+} = {}) => {
   const seen = new Set<string>();
   const rows: Place[] = [];
   const objects = new Map<string, Uint8Array>();
@@ -80,7 +87,7 @@ const setUp = ({ prim = null }: { prim?: Prim | null } = {}) => {
 
   const app = createApp({
     appOrigin: ORIGIN,
-    google,
+    google: places,
     mapDir: "/nowhere",
     newId: () =>
       `00000000-0000-4000-8000-${String((next += 1)).padStart(12, "0")}`,
@@ -295,6 +302,41 @@ describe("adding and removing places", () => {
     });
   });
 
+  it("says when Google refused the key, and when Google is only down, with a 503 Cloudflare lets through", async () => {
+    const search = `/api/places/search?q=petit&session=${SESSION}`;
+    const admin = { headers: { cookie: "session=admin" } };
+
+    const refused = setUp({
+      places: {
+        details: () => Promise.reject(new GoogleKeyRefusedError("403")),
+        search: () => Promise.reject(new GoogleKeyRefusedError("403")),
+      },
+    });
+
+    const down = setUp({
+      places: {
+        details: () => Promise.reject(new Error("500")),
+        search: () => Promise.reject(new Error("500")),
+      },
+    });
+
+    const answer = await refused.app.request(search, admin);
+
+    expect(answer.status).toBe(503);
+    expect(await answer.json()).toEqual({ error: "google-key" });
+    expect(
+      await jsonOf(
+        refused.app.request(
+          `/api/places/pick?id=${CAMBODGE.placeId}&session=${SESSION}`,
+          admin
+        )
+      )
+    ).toEqual({ error: "google-key" });
+    expect(await jsonOf(down.app.request(search, admin))).toEqual({
+      error: "google",
+    });
+  });
+
   it("refuses a cuisine off the menu, a bad date, or a place Google does not list as a restaurant", async () => {
     const { app } = setUp();
 
@@ -486,6 +528,26 @@ describe("photos", () => {
     ).toBe(204);
     expect(objects.size).toBe(0);
     expect(await statusOf(app.request(`/api/photos/${id}/large`))).toBe(404);
+  });
+});
+
+describe("outside APIs", () => {
+  it("answers 503 when one fails, since Cloudflare hides an origin's 502", async () => {
+    const { app } = setUp();
+
+    const answers = await Promise.all(
+      ["/api/velib", "/api/weather", "/api/region"].map(async (path) => {
+        const response = await app.request(path);
+
+        return [response.status, await response.json()];
+      })
+    );
+
+    expect(answers).toEqual([
+      [503, { error: "velib" }],
+      [503, { error: "weather" }],
+      [503, { error: "region" }],
+    ]);
   });
 });
 

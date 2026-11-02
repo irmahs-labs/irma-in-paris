@@ -147,6 +147,63 @@ export const toGooglePlace = (
   };
 };
 
+/** How Google says no: `{ error: { code, message, status, details } }`. */
+export const errorAnswer = z.object({
+  error: z.object({
+    details: z.optional(z.array(z.object({ reason: z.optional(z.string()) }))),
+    message: z.optional(z.string()),
+    status: z.optional(z.string()),
+  }),
+});
+
+/**
+ * Google turned the key itself down: it is not valid, Places API (New) is
+ * not enabled for its project, billing is off, or the key's restrictions
+ * leave this server out. Trying again will not help; the key needs fixing.
+ */
+export class GoogleKeyRefusedError extends Error {
+  override name = "GoogleKeyRefusedError";
+}
+
+/** The reasons Google gives when the trouble is the key, not the request. */
+const KEY_REASONS = new Set([
+  "API_KEY_INVALID",
+  "BILLING_DISABLED",
+  "SERVICE_DISABLED",
+]);
+
+/** The body as JSON, or null when it is not: then only its text can say what went wrong. */
+const jsonOf = (body: string) => {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Google's refusal as an error that says what Google said, so the server's
+ * log shows the cause and not only a status.
+ */
+export const toGoogleError = (status: number, body: string) => {
+  const parsed = errorAnswer.safeParse(jsonOf(body));
+  const error = parsed.success ? parsed.data.error : undefined;
+  const reason = error?.details?.find((detail) => detail.reason)?.reason ?? "";
+
+  const said = error
+    ? [error.status, reason, error.message].filter(Boolean).join(" ")
+    : body.slice(0, 300);
+
+  const message = `Google Places answered ${status}: ${said}`;
+
+  return status === 401 ||
+    status === 403 ||
+    KEY_REASONS.has(reason) ||
+    reason.startsWith("API_KEY_")
+    ? new GoogleKeyRefusedError(message)
+    : new Error(message);
+};
+
 export interface GooglePlaces {
   search: (input: string, session: string) => Promise<Suggestion[]>;
   /** Null when Google has no such place, or it is not somewhere to eat. */
@@ -177,7 +234,7 @@ export const createGooglePlaces = ({
     }
 
     if (!response.ok) {
-      throw new Error(`Google Places answered ${response.status}`);
+      throw toGoogleError(response.status, await response.text());
     }
 
     const body: unknown = await response.json();

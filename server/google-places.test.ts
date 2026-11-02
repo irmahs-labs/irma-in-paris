@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  GoogleKeyRefusedError,
   areaOf,
   autocompleteAnswer,
   createGooglePlaces,
   detailsAnswer,
   toGooglePlace,
+  toGoogleError,
   toSuggestions,
 } from "./google-places";
 
@@ -144,5 +146,70 @@ describe("createGooglePlaces", () => {
     expect(
       new Headers(asked[1]?.init?.headers).get("x-goog-fieldmask")
     ).toContain("location");
+  });
+});
+
+/** Google's JSON for a refusal, as the Places API (New) sends it. */
+const refusal = (status: string, reason: string, message: string) =>
+  JSON.stringify({
+    error: {
+      code: 403,
+      details: [
+        { "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason },
+      ],
+      message,
+      status,
+    },
+  });
+
+describe("toGoogleError", () => {
+  it("tells a refused key from Google being down, and keeps what Google said", () => {
+    const disabled = toGoogleError(
+      403,
+      refusal(
+        "PERMISSION_DENIED",
+        "SERVICE_DISABLED",
+        "Places API (New) has not been used in project 1 before or it is disabled."
+      )
+    );
+
+    expect(disabled).toBeInstanceOf(GoogleKeyRefusedError);
+    expect(disabled.message).toContain("SERVICE_DISABLED");
+    expect(disabled.message).toContain("Places API (New) has not been used");
+
+    expect(
+      toGoogleError(
+        400,
+        refusal("INVALID_ARGUMENT", "API_KEY_INVALID", "API key not valid.")
+      )
+    ).toBeInstanceOf(GoogleKeyRefusedError);
+
+    const down = toGoogleError(500, "<html>Server Error</html>");
+
+    expect(down).not.toBeInstanceOf(GoogleKeyRefusedError);
+    expect(down.message).toBe(
+      "Google Places answered 500: <html>Server Error</html>"
+    );
+  });
+
+  it("is what a search throws when Google says no", async () => {
+    const google = createGooglePlaces({
+      apiKey: "secret",
+      fetcher: () =>
+        Promise.resolve(
+          new Response(
+            refusal(
+              "PERMISSION_DENIED",
+              "API_KEY_SERVICE_BLOCKED",
+              "Requests to this API are blocked."
+            ),
+            { status: 403 }
+          )
+        ),
+    });
+
+    await expect(
+      google.search("petit", "11111111-2222-4333-8444-555555555555")
+    ).rejects.toThrow(GoogleKeyRefusedError);
   });
 });
