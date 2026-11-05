@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Reads the repository and nothing else.
+permissions:
+  contents: read
+
 concurrency:
   group: deploy
   cancel-in-progress: false
