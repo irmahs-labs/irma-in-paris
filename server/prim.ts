@@ -163,8 +163,21 @@ export const parisStamp = (date: Date) => {
 };
 
 /** "Château de Vincennes (Vincennes)" → "Château de Vincennes": the town is noise on a sign. */
-const terminusName = (name: string) =>
-  name.replace(/\s*\([^)]*\)\s*$/u, "").trim();
+export const terminusName = (name: string) => {
+  const trimmed = name.trim();
+
+  if (!trimmed.endsWith(")")) {
+    return trimmed;
+  }
+
+  // The bracket opens at the first "(" since the ")" before the last one.
+  const open = trimmed.indexOf(
+    "(",
+    trimmed.lastIndexOf(")", trimmed.length - 2) + 1
+  );
+
+  return open === -1 ? trimmed : trimmed.slice(0, open).trim();
+};
 
 /** Trains shown for each direction, and directions for a stop. */
 const TRAINS = 3;

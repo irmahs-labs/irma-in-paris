@@ -86,7 +86,7 @@ const placeRequest = z.object({
 });
 
 /** The map files there are. */
-const MAP_FILES = new Set(["paris.pmtiles", "idf.pmtiles"]);
+const MAP_FILES = ["paris.pmtiles", "idf.pmtiles"] as const;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const PLACE_ID = /^\d{1,18}$/u;
@@ -161,10 +161,11 @@ export const createApp = ({
   app.get("/healthz", (c) => c.text("ok"));
 
   app.on(["GET", "HEAD"], "/tiles/:file", async (c) => {
-    const file = c.req.param("file") ?? "";
+    const asked = c.req.param("file");
+    // The path is built from the app's own list, never from the request.
+    const file = MAP_FILES.find((name) => name === asked);
 
-    // Only the maps the app has, by name: never a path from the request.
-    if (!MAP_FILES.has(file)) {
+    if (!file) {
       return fail(c, 404, "map");
     }
 

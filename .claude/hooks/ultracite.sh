@@ -9,7 +9,7 @@ set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-$(dirname "$0")/../..}" || exit 0
 
 file=$(jq -r '.tool_response.filePath // .tool_input.file_path // empty')
-[ -n "$file" ] && [ -f "$file" ] || exit 0
+[[ -n "$file" && -f "$file" ]] || exit 0
 
 # Only what Ultracite handles, only inside this project, never dependencies or
 # build output (.next for Next.js, dist and dist-server for Vite and Node).
@@ -42,15 +42,15 @@ case "$file" in
   *.ts | *.tsx) types=$(npx --no-install tsc --noEmit 2>&1) || true ;;
 esac
 
-[ "$count" -eq 0 ] && [ -z "$types" ] && exit 0
+[[ "$count" -eq 0 && -z "$types" ]] && exit 0
 
 {
-  if [ "$count" -gt 0 ]; then
+  if [[ "$count" -gt 0 ]]; then
     echo "Ultracite: $count problem(s) in $file it could not fix itself."
     printf '%s\n' "$lint" | grep ': error ' | head -n 40
-    [ "$count" -gt 40 ] && echo "… and $((count - 40)) more. Run: npx ultracite check $file"
+    [[ "$count" -gt 40 ]] && echo "… and $((count - 40)) more. Run: npx ultracite check $file"
   fi
-  if [ -n "$types" ]; then
+  if [[ -n "$types" ]]; then
     echo "Typecheck fails after this edit:"
     printf '%s\n' "$types" | head -n 20
   fi
