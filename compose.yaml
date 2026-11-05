@@ -6,15 +6,17 @@
 #   npm run db:reset            delete the local database and rebuild it
 #   npm run storage:up          start Garage, with its bucket and the app's key
 #
-# The credentials are for these local containers only; production has its
-# own (compose.prod.yaml). Postgres is on 5435, beside pantry-spinner's on
+# Postgres has no password and Garage's key is a local one: these containers
+# are for this machine only; production has its own (compose.prod.yaml). Postgres is on 5435, beside pantry-spinner's on
 # 5432, the account service's on 5433 and Mini Games' on 5434.
 services:
   db:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: irma_in_paris
-      POSTGRES_PASSWORD: irma_in_paris
+      # No password: Postgres is only reachable from this machine (127.0.0.1)
+      # and the containers beside it, so it lets the local user straight in.
+      POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_DB: irma_in_paris
     ports:
       - "127.0.0.1:${DB_PORT-5435}:5432"
@@ -30,7 +32,7 @@ services:
     image: ghcr.io/amacneil/dbmate:2
     profiles: [tools]
     environment:
-      DATABASE_URL: postgres://irma_in_paris:irma_in_paris@db:5432/irma_in_paris?sslmode=disable
+      DATABASE_URL: postgres://irma_in_paris@db:5432/irma_in_paris?sslmode=disable
       DBMATE_MIGRATIONS_DIR: /db/migrations
       DBMATE_NO_DUMP_SCHEMA: "true"
     volumes:
