@@ -8,6 +8,7 @@ import {
   lineReportsAnswer,
   linesAnswer,
   stopAreasAnswer,
+  terminusName,
   toDepartures,
   toLines,
   toStatuses,
@@ -337,5 +338,28 @@ describe("describe", () => {
       en: "Works: No trains between La Défense and Nanterre-Préfecture from Thu 29 Oct, 22:30",
       fr: "Travaux : Trafic interrompu entre La Défense et Nanterre-Préfecture à partir du jeu. 29 oct., 22:30",
     });
+  });
+});
+
+describe("terminusName", () => {
+  it("drops the town in brackets at the end", () => {
+    expect(terminusName("Château de Vincennes (Vincennes)")).toBe(
+      "Château de Vincennes"
+    );
+    expect(terminusName("  La Défense (Puteaux)  ")).toBe("La Défense");
+    expect(terminusName("Gare ((Nord)")).toBe("Gare");
+  });
+
+  it("keeps a name with no bracket at its end", () => {
+    expect(terminusName("Nation")).toBe("Nation");
+    expect(terminusName("Gare (Nord) Sud")).toBe("Gare (Nord) Sud");
+    expect(terminusName("Gare (Nord)) ")).toBe("Gare (Nord))");
+  });
+
+  it("answers at once for long names", () => {
+    expect(terminusName(`A${" ".repeat(50_000)}(x)`)).toBe("A");
+    expect(terminusName(`${"(".repeat(50_000)}x`)).toBe(
+      `${"(".repeat(50_000)}x`
+    );
   });
 });

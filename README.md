@@ -48,6 +48,8 @@ npm run dev:api          # the server on :3002
 npm run dev              # the site on http://localhost:5173
 ```
 
+The local database has no password: it only answers this machine. One made before it went passwordless still asks for one; `npm run db:reset` rebuilds it.
+
 Sign-in goes through the account service, which does not answer `localhost` from `auth.irmahs.dev`; run irmahs-labs/auth locally on `:3001` (and set `VITE_AUTH_URL=http://localhost:3001`) to sign in as an admin.
 
 ```bash

@@ -11,7 +11,7 @@ import {
 } from "./places";
 
 // Runs only against a real, migrated database: after `npm run db:up`, with
-// TEST_DATABASE_URL=postgres://irma_in_paris:irma_in_paris@localhost:5435/irma_in_paris
+// TEST_DATABASE_URL=postgres://irma_in_paris@localhost:5435/irma_in_paris
 // The Database workflow runs it in CI.
 const url = process.env.TEST_DATABASE_URL;
 const ADMIN = "00000000-0000-4000-8000-00000000000a";

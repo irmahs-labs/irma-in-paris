@@ -16,6 +16,17 @@ const currentPath = () => window.location.pathname;
 
 export const usePath = () => useSyncExternalStore(subscribe, currentPath);
 
+/** "/places//" → "/places": a page is the same with or without trailing slashes. */
+export const withoutTrailingSlashes = (path: string): string => {
+  let end = path.length;
+
+  while (path[end - 1] === "/") {
+    end -= 1;
+  }
+
+  return path.slice(0, end);
+};
+
 const navigate = (to: string) => {
   if (to === window.location.pathname) {
     return;

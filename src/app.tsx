@@ -7,7 +7,7 @@ import { Icon } from "./lib/icon";
 import type { IconName } from "./lib/icon";
 import { useCopy, useLanguage } from "./lib/language";
 import type { Language } from "./lib/language";
-import { Link, usePath } from "./lib/router";
+import { Link, usePath, withoutTrailingSlashes } from "./lib/router";
 import { PlacesScreen } from "./screens/places";
 import { RegionScreen } from "./screens/region";
 import { TransportScreen } from "./screens/transport";
@@ -101,7 +101,7 @@ const Menu = ({ path }: { path: string }) => {
 /** Every page: the header, the menu and the section, and the footer under them. */
 export const App = () => {
   // "/places/" and "/places" are the same page; anything unknown is the weather.
-  const asked = usePath().replace(/\/+$/u, "") || "/";
+  const asked = withoutTrailingSlashes(usePath()) || "/";
   const section = SECTIONS.find((entry) => entry.path === asked) ?? SECTIONS[0];
   const language = useLanguage();
 

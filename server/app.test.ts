@@ -1,3 +1,7 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type { Place } from "../src/lib/api";
@@ -57,9 +61,11 @@ const google: GooglePlaces = {
 const setUp = ({
   prim = null,
   places = google,
+  mapDir = "/nowhere",
 }: {
   prim?: Prim | null;
   places?: GooglePlaces;
+  mapDir?: string;
 } = {}) => {
   const seen = new Set<string>();
   const rows: Place[] = [];
@@ -88,7 +94,7 @@ const setUp = ({
   const app = createApp({
     appOrigin: ORIGIN,
     google: places,
-    mapDir: "/nowhere",
+    mapDir,
     newId: () =>
       `00000000-0000-4000-8000-${String((next += 1)).padStart(12, "0")}`,
     places: {
@@ -548,6 +554,23 @@ describe("outside APIs", () => {
       [503, { error: "weather" }],
       [503, { error: "region" }],
     ]);
+  });
+});
+
+describe("map tiles", () => {
+  it("serves only the maps the app has, never a path from the request", async () => {
+    const mapDir = await mkdtemp(nodePath.join(tmpdir(), "maps-"));
+    await writeFile(nodePath.join(mapDir, "paris.pmtiles"), "paris");
+    await writeFile(nodePath.join(mapDir, "secret.txt"), "secret");
+    const { app } = setUp({ mapDir });
+
+    const map = await app.request("/tiles/paris.pmtiles");
+    expect(map.status).toBe(200);
+    expect(await map.text()).toBe("paris");
+
+    expect(await statusOf(app.request("/tiles/secret.txt"))).toBe(404);
+    expect(await statusOf(app.request("/tiles/..%2Fsecret.txt"))).toBe(404);
+    expect(await statusOf(app.request("/tiles/idf.pmtiles"))).toBe(404);
   });
 });
 
