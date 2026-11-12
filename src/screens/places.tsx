@@ -27,6 +27,7 @@ const COPY = {
     addAPhoto: "Add a photo",
     addPhoto: "add photo",
     adding: "adding…",
+    average: (stars: string) => `${stars} stars on average`,
     change: "change",
     close: "close",
     cuisine: "Cuisine",
@@ -73,6 +74,7 @@ const COPY = {
     addAPhoto: "Ajouter une photo",
     addPhoto: "ajouter la photo",
     adding: "ajout…",
+    average: (stars: string) => `${stars} étoiles en moyenne`,
     change: "changer",
     close: "fermer",
     cuisine: "Cuisine",
@@ -684,7 +686,7 @@ export const PlacesScreen = () => {
           <LazyMap
             label={t.map}
             focus={picked}
-            markers={places.map((entry, i) => {
+            markers={places.map((entry) => {
               const average = averageText(entry.ratings, language);
 
               return {
@@ -705,10 +707,7 @@ export const PlacesScreen = () => {
                         {average}
                       </>
                     ) : (
-                      <>
-                        <Icon name="fork" size={16} />
-                        {i + 1}
-                      </>
+                      <Icon name="fork" size={16} />
                     )}
                   </button>
                 ),
@@ -721,7 +720,7 @@ export const PlacesScreen = () => {
               <p className="hint">{t.noPlaces(isAdmin)}</p>
             ) : null}
             <ul className="places__list">
-              {places.map((entry, i) => (
+              {places.map((entry) => (
                 <li key={entry.id}>
                   <button
                     type="button"
@@ -729,22 +728,31 @@ export const PlacesScreen = () => {
                     className="place-row"
                     onClick={() => setPicked(entry.id)}
                   >
-                    <span aria-hidden="true" className="place-row__num">
-                      {i + 1}
-                    </span>
+                    {entry.photos[0] ? (
+                      <img
+                        className="place-row__photo"
+                        src={photoUrl(entry.photos[0], "thumb")}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : null}
                     <span className="place-row__text">
                       <span className="place-row__name">{entry.name}</span>
                       <span className="place-row__more">
-                        {[
-                          entry.area,
-                          cuisineName(entry.cuisine, language),
-                          averageText(entry.ratings, language)
-                            ? `★ ${averageText(entry.ratings, language)}`
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {cuisineName(entry.cuisine, language)}
                       </span>
+                      {averageText(entry.ratings, language) ? (
+                        <span
+                          className="place-row__stars"
+                          role="img"
+                          aria-label={t.average(
+                            averageText(entry.ratings, language) ?? ""
+                          )}
+                        >
+                          <Icon name="star" size={14} filled />
+                          {averageText(entry.ratings, language)}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 </li>
