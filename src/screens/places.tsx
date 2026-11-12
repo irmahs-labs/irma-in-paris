@@ -17,6 +17,7 @@ import type {
 } from "../lib/api";
 import { Icon } from "../lib/icon";
 import { useCopy, useLanguage } from "../lib/language";
+import { averageText } from "../lib/ratings";
 import { useApi } from "../lib/use-api";
 import { useConfirm } from "../lib/use-confirm";
 
@@ -41,6 +42,8 @@ const COPY = {
     photo: "Photo",
     photosOf: (name: string) => `Photos of ${name}`,
     pickOne: "Pick one",
+    pinLabel: (name: string, average: string | null) =>
+      average ? `${name}, ${average} stars on average` : name,
     rated: {
       food: "Food",
       service: "Service",
@@ -85,6 +88,8 @@ const COPY = {
     photo: "Photo",
     photosOf: (name: string) => `Photos de ${name}`,
     pickOne: "Choisir",
+    pinLabel: (name: string, average: string | null) =>
+      average ? `${name}, ${average} étoiles en moyenne` : name,
     rated: {
       food: "Cuisine",
       service: "Service",
@@ -679,23 +684,36 @@ export const PlacesScreen = () => {
           <LazyMap
             label={t.map}
             focus={picked}
-            markers={places.map((entry, i) => ({
-              id: entry.id,
-              lat: entry.lat,
-              lon: entry.lon,
-              node: (
-                <button
-                  type="button"
-                  aria-pressed={entry.id === place?.id}
-                  aria-label={entry.name}
-                  className="pin pin--place"
-                  onClick={() => setPicked(entry.id)}
-                >
-                  <Icon name="fork" size={16} />
-                  {i + 1}
-                </button>
-              ),
-            }))}
+            markers={places.map((entry, i) => {
+              const average = averageText(entry.ratings, language);
+
+              return {
+                id: entry.id,
+                lat: entry.lat,
+                lon: entry.lon,
+                node: (
+                  <button
+                    type="button"
+                    aria-pressed={entry.id === place?.id}
+                    aria-label={t.pinLabel(entry.name, average)}
+                    className="pin pin--place"
+                    onClick={() => setPicked(entry.id)}
+                  >
+                    {average ? (
+                      <>
+                        <Icon name="star" size={16} filled />
+                        {average}
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="fork" size={16} />
+                        {i + 1}
+                      </>
+                    )}
+                  </button>
+                ),
+              };
+            })}
           />
           <fieldset className="panel places">
             <legend className="legend">{t.restaurants}</legend>
@@ -717,7 +735,13 @@ export const PlacesScreen = () => {
                     <span className="place-row__text">
                       <span className="place-row__name">{entry.name}</span>
                       <span className="place-row__more">
-                        {[entry.area, cuisineName(entry.cuisine, language)]
+                        {[
+                          entry.area,
+                          cuisineName(entry.cuisine, language),
+                          averageText(entry.ratings, language)
+                            ? `★ ${averageText(entry.ratings, language)}`
+                            : "",
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
