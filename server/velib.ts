@@ -4,40 +4,31 @@ import type { VelibReport, VelibStation } from "../src/lib/api";
 import type { Box } from "../src/lib/map";
 import { CENTRAL_PARIS, isInside } from "../src/lib/map";
 
-/** Vélib' Métropole's open data (GBFS), which needs no key. */
-const FEED =
-  "https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole";
+/**
+ * Vélib' Métropole's stations as the City of Paris republishes them, every
+ * minute, on its open-data portal, which needs no key. Not Vélib's own GBFS
+ * feed: the firewall in front of it turns the server away (403).
+ */
+const RECORDS =
+  "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/velib-disponibilite-en-temps-reel/exports/json";
 
-const id = z.union([z.number(), z.string()]);
+/** The portal's "yes" and "no", in French. */
+const YES = "OUI";
 
-export const informationAnswer = z.object({
-  data: z.object({
-    stations: z.array(
-      z.object({
-        lat: z.number(),
-        lon: z.number(),
-        name: z.string(),
-        station_id: id,
-      })
-    ),
-  }),
-});
+export const stationsAnswer = z.array(
+  z.object({
+    coordonnees_geo: z.object({ lat: z.number(), lon: z.number() }),
+    ebike: z.number(),
+    is_installed: z.string(),
+    is_renting: z.string(),
+    mechanical: z.number(),
+    name: z.string(),
+    numdocksavailable: z.number(),
+    stationcode: z.string(),
+  })
+);
 
-export const statusAnswer = z.object({
-  data: z.object({
-    stations: z.array(
-      z.object({
-        is_installed: z.number(),
-        is_renting: z.number(),
-        num_bikes_available_types: z.optional(
-          z.array(z.record(z.string(), z.number()))
-        ),
-        num_docks_available: z.number(),
-        station_id: id,
-      })
-    ),
-  }),
-});
+export type Stations = z.infer<typeof stationsAnswer>;
 
 /** How many columns and rows the map is cut into: one station shows in each. */
 const COLUMNS = 5;
@@ -84,60 +75,50 @@ export const spreadOut = (
   return picked;
 };
 
-const countOf = (
-  types: Record<string, number>[] | undefined,
-  kind: "mechanical" | "ebike"
-) => types?.reduce((sum, type) => sum + (type[kind] ?? 0), 0) ?? 0;
-
-/** The two GBFS files, joined by station, as the transport screen shows them. */
-export type Information = z.infer<typeof informationAnswer>;
-
-export type Status = z.infer<typeof statusAnswer>;
-
+/** The open stations, as the transport screen shows them, one per cell of the map. */
 export const toVelibReport = (
-  information: Information,
-  status: Status,
+  stations: Stations,
   now: Date = new Date()
-): VelibReport => {
-  const places = new Map(
-    information.data.stations.map((station) => [
-      String(station.station_id),
-      station,
-    ])
-  );
+): VelibReport => ({
+  stations: spreadOut(
+    stations.flatMap((station) =>
+      station.is_installed === YES && station.is_renting === YES
+        ? [
+            {
+              docks: station.numdocksavailable,
+              ebike: station.ebike,
+              id: station.stationcode,
+              lat: station.coordonnees_geo.lat,
+              lon: station.coordonnees_geo.lon,
+              mechanical: station.mechanical,
+              name: station.name,
+            },
+          ]
+        : []
+    )
+  ),
+  updatedAt: now.toISOString(),
+});
 
-  const stations = status.data.stations.flatMap((state) => {
-    const place = places.get(String(state.station_id));
-
-    if (!place || state.is_installed !== 1 || state.is_renting !== 1) {
-      return [];
-    }
-
-    return [
-      {
-        docks: state.num_docks_available,
-        ebike: countOf(state.num_bikes_available_types, "ebike"),
-        id: String(state.station_id),
-        lat: place.lat,
-        lon: place.lon,
-        mechanical: countOf(state.num_bikes_available_types, "mechanical"),
-        name: place.name,
-      },
-    ];
+/** The portal's query: the stations inside the box, only the fields shown. */
+export const recordsUrl = (box: Box = CENTRAL_PARIS) => {
+  const query = new URLSearchParams({
+    select:
+      "stationcode,name,is_installed,is_renting,numdocksavailable,mechanical,ebike,coordonnees_geo",
+    where: `in_bbox(coordonnees_geo, ${box.south}, ${box.west}, ${box.north}, ${box.east})`,
   });
 
-  return { stations: spreadOut(stations), updatedAt: now.toISOString() };
+  return `${RECORDS}?${query}`;
 };
 
-const getJson = async <T>(
-  url: string,
-  schema: z.ZodMiniType<T>,
-  fetcher: typeof fetch
-): Promise<T> => {
+export const fetchVelib = async (
+  fetcher: typeof fetch = fetch
+): Promise<VelibReport> => {
+  const url = recordsUrl();
   const response = await fetcher(url, { signal: AbortSignal.timeout(8000) });
 
   if (!response.ok) {
-    // The start of the body says who refused: Vélib' itself, or the
+    // The start of the body says who refused: the portal itself, or the
     // firewall in front of it.
     const body = await response.text();
 
@@ -146,16 +127,5 @@ const getJson = async <T>(
     );
   }
 
-  return schema.parse(await response.json());
-};
-
-export const fetchVelib = async (
-  fetcher: typeof fetch = fetch
-): Promise<VelibReport> => {
-  const [information, status] = await Promise.all([
-    getJson(`${FEED}/station_information.json`, informationAnswer, fetcher),
-    getJson(`${FEED}/station_status.json`, statusAnswer, fetcher),
-  ]);
-
-  return toVelibReport(information, status);
+  return toVelibReport(stationsAnswer.parse(await response.json()));
 };

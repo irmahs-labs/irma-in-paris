@@ -9,12 +9,12 @@ const COPY = {
   en: {
     more: "more apps at",
     sources:
-      "Live sources: Île-de-France Mobilités PRIM · Open-Meteo · Vélib' Métropole open data · Google Maps. Maps: Protomaps, © OpenStreetMap contributors",
+      "Live sources: Île-de-France Mobilités PRIM · Open-Meteo · Vélib' Métropole via Paris Data · Google Maps. Maps: Protomaps, © OpenStreetMap contributors",
   },
   fr: {
     more: "plus d’apps sur",
     sources:
-      "Sources en direct : Île-de-France Mobilités PRIM · Open-Meteo · données ouvertes Vélib' Métropole · Google Maps. Cartes : Protomaps, © les contributeurs d’OpenStreetMap",
+      "Sources en direct : Île-de-France Mobilités PRIM · Open-Meteo · Vélib' Métropole via Paris Data · Google Maps. Cartes : Protomaps, © les contributeurs d’OpenStreetMap",
   },
 };
 

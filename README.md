@@ -6,7 +6,7 @@ Paris right now, at **https://irma-in-paris.irmahs.dev**: the weather, the next 
 | --- | --- | --- |
 | Weather | `/` | [Open-Meteo](https://open-meteo.com) (no key) |
 | Île-de-France | `/region` | [Open-Meteo](https://open-meteo.com) for 29 towns: temperature, humidity, wind, the European AQI and pollen ([Copernicus CAMS](https://atmosphere.copernicus.eu)) (no key) |
-| Public transport | `/transport` | [PRIM](https://prim.iledefrance-mobilites.fr), Île-de-France Mobilités (key), and [Vélib' Métropole open data](https://www.velib-metropole.fr/donnees-open-data-gbfs-du-service-velib-metropole) (no key) |
+| Public transport | `/transport` | [PRIM](https://prim.iledefrance-mobilites.fr), Île-de-France Mobilités (key), and Vélib' Métropole's stations from [Paris Data](https://opendata.paris.fr/explore/dataset/velib-disponibilite-en-temps-reel/), the City of Paris's copy of Vélib's feed, updated every minute (no key; Vélib's own feed turns the server away with a 403) |
 | Places I've been | `/places` | This app's Postgres, photos in Garage; restaurants picked from [Google Maps' Places API](https://developers.google.com/maps/documentation/places/web-service) (key) |
 
 The maps are [Protomaps](https://protomaps.com)' OpenStreetMap basemap, drawn by [MapLibre](https://maplibre.org) in Light and Dark Matcha from one file the app serves itself: no map service is asked anything.
