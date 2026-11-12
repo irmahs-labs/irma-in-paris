@@ -149,6 +149,23 @@ describe("createGooglePlaces", () => {
   });
 });
 
+describe("toGooglePlace", () => {
+  it("reads an address with a part Google sends without types or text", () => {
+    const place = toGooglePlace(
+      detailsAnswer.parse({
+        ...DETAILS,
+        addressComponents: [
+          { longText: "Bâtiment B" },
+          { types: ["subpremise"] },
+          ...DETAILS.addressComponents,
+        ],
+      })
+    );
+
+    expect(place?.area).toBe("11th");
+  });
+});
+
 /** Google's JSON for a refusal, as the Places API (New) sends it. */
 const refusal = (status: string, reason: string, message: string) =>
   JSON.stringify({
