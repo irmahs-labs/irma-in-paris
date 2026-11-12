@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-import type { Photo, Place } from "../src/lib/api";
+import type { Photo, Place, Ratings } from "../src/lib/api";
 
 export interface NewPlace {
   googlePlaceId: string;
@@ -9,8 +9,7 @@ export interface NewPlace {
   cuisine: string;
   address: string;
   area: string;
-  visitedOn: string | null;
-  dish: string;
+  ratings: Ratings;
   lat: number;
   lon: number;
 }
@@ -18,7 +17,7 @@ export interface NewPlace {
 export interface NewPhoto {
   id: string;
   placeId: string;
-  caption: string;
+  notes: string;
   width: number;
   height: number;
   uploadedBy: string;
@@ -31,8 +30,10 @@ interface PlaceRow {
   cuisine: string;
   address: string;
   area: string;
-  visited_on: string | null;
-  dish: string;
+  rating_service: number | null;
+  rating_food: number | null;
+  rating_value: number | null;
+  rating_toilet: number | null;
   lat: number;
   lon: number;
   photos: Photo[];
@@ -42,22 +43,26 @@ const toPlace = (row: PlaceRow): Place => ({
   address: row.address,
   area: row.area,
   cuisine: row.cuisine,
-  dish: row.dish,
   id: row.id,
   lat: row.lat,
   lon: row.lon,
   mapsUrl: row.google_maps_url,
   name: row.name,
   photos: row.photos,
-  visitedOn: row.visited_on,
+  ratings: {
+    food: row.rating_food,
+    service: row.rating_service,
+    toilet: row.rating_toilet,
+    value: row.rating_value,
+  },
 });
 
 const SELECT_PLACES = `
   select p.id::text, p.google_maps_url, p.name, p.cuisine, p.address, p.area,
-         to_char(p.visited_on, 'YYYY-MM-DD') as visited_on, p.dish, p.lat, p.lon,
+         p.rating_service, p.rating_food, p.rating_value, p.rating_toilet, p.lat, p.lon,
          coalesce(
            json_agg(
-             json_build_object('id', ph.id, 'caption', ph.caption, 'width', ph.width, 'height', ph.height)
+             json_build_object('id', ph.id, 'notes', ph.notes, 'width', ph.width, 'height', ph.height)
              order by ph.created_at
            ) filter (where ph.id is not null),
            '[]'
@@ -65,12 +70,12 @@ const SELECT_PLACES = `
     from places p
     left join place_photos ph on ph.place_id = p.id`;
 
-/** Every place, the most recently visited first, each with its photos in the order they were added. */
+/** Every place, the most recently added first, each with its photos in the order they were added. */
 export const readPlaces = async (pool: Pool): Promise<Place[]> => {
   const { rows } = await pool.query<PlaceRow>(
     `${SELECT_PLACES}
      group by p.id
-     order by p.visited_on desc nulls last, p.id desc`
+     order by p.id desc`
   );
 
   return rows.map(toPlace);
@@ -82,8 +87,9 @@ export const addPlace = async (
   place: NewPlace
 ): Promise<Place | null> => {
   const { rows } = await pool.query<{ id: string }>(
-    `insert into places (google_place_id, google_maps_url, name, cuisine, address, area, visited_on, dish, lat, lon)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `insert into places (google_place_id, google_maps_url, name, cuisine, address, area,
+                         rating_service, rating_food, rating_value, rating_toilet, lat, lon)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      on conflict (google_place_id) do nothing
      returning id::text`,
     [
@@ -93,8 +99,10 @@ export const addPlace = async (
       place.cuisine,
       place.address,
       place.area,
-      place.visitedOn,
-      place.dish,
+      place.ratings.service,
+      place.ratings.food,
+      place.ratings.value,
+      place.ratings.toilet,
       place.lat,
       place.lon,
     ]
@@ -109,6 +117,22 @@ export const addPlace = async (
   const { googlePlaceId: _id, ...shown } = place;
 
   return { ...shown, id: row.id, photos: [] };
+};
+
+/** False when there is no such place. */
+export const rate = async (
+  pool: Pool,
+  id: string,
+  ratings: Ratings
+): Promise<boolean> => {
+  const { rowCount } = await pool.query(
+    `update places
+        set rating_service = $2, rating_food = $3, rating_value = $4, rating_toilet = $5
+      where id = $1`,
+    [id, ratings.service, ratings.food, ratings.value, ratings.toilet]
+  );
+
+  return rowCount === 1;
 };
 
 /** The ids of the photos that went with it, so their files can go too; null when there was no such place. */
@@ -134,12 +158,12 @@ export const addPhoto = async (
   photo: NewPhoto
 ): Promise<boolean> => {
   const { rowCount } = await pool.query(
-    `insert into place_photos (id, place_id, caption, width, height, uploaded_by)
+    `insert into place_photos (id, place_id, notes, width, height, uploaded_by)
      select $1, id, $3, $4, $5, $6 from places where id = $2`,
     [
       photo.id,
       photo.placeId,
-      photo.caption,
+      photo.notes,
       photo.width,
       photo.height,
       photo.uploadedBy,

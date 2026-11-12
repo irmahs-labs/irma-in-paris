@@ -137,9 +137,17 @@ export interface RegionReport {
   towns: TownNow[];
 }
 
+/** What Irma rates a restaurant on. */
+export const RATED = ["food", "service", "value", "toilet"] as const;
+
+export type Rated = (typeof RATED)[number];
+
+/** Out of five stars each; null when not rated. */
+export type Ratings = Record<Rated, number | null>;
+
 export interface Photo {
   id: string;
-  caption: string;
+  notes: string;
   width: number;
   height: number;
 }
@@ -150,9 +158,7 @@ export interface Place {
   cuisine: string;
   address: string;
   area: string;
-  /** "2026-10-12", or null when the date is not known. */
-  visitedOn: string | null;
-  dish: string;
+  ratings: Ratings;
   lat: number;
   lon: number;
   /** The restaurant on Google Maps; null for places added before, from an address. */

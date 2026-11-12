@@ -16,6 +16,9 @@ const GLYPHS = {
     "M12 7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5z",
   ],
   plus: ["M12 5v14M5 12h14"],
+  star: [
+    "M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z",
+  ],
   sun: [
     "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8z",
     "M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
@@ -35,15 +38,22 @@ interface IconProps {
   name: IconName;
   size?: number;
   weight?: number;
+  /** Filled in the surrounding text colour too, as a star that is on. */
+  filled?: boolean;
 }
 
-export const Icon = ({ name, size = 22, weight = 2 }: IconProps) => (
+export const Icon = ({
+  name,
+  size = 22,
+  weight = 2,
+  filled = false,
+}: IconProps) => (
   <svg
     aria-hidden="true"
     width={size}
     height={size}
     viewBox="0 0 24 24"
-    fill="none"
+    fill={filled ? "currentColor" : "none"}
     stroke="currentColor"
     strokeWidth={weight}
     strokeLinecap="round"

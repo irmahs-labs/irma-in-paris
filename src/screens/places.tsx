@@ -5,10 +5,18 @@ import { AppWindow } from "../components/app-window";
 import { LazyMap } from "../components/lazy-map";
 import { CUISINES, cuisineName } from "../data/cuisines";
 import * as admin from "../lib/admin";
-import type { Me, Photo, PickedPlace, Place, Suggestion } from "../lib/api";
+import { RATED } from "../lib/api";
+import type {
+  Me,
+  Photo,
+  PickedPlace,
+  Place,
+  Rated,
+  Ratings,
+  Suggestion,
+} from "../lib/api";
 import { Icon } from "../lib/icon";
-import { LOCALES, useCopy, useLanguage } from "../lib/language";
-import type { Language } from "../lib/language";
+import { useCopy, useLanguage } from "../lib/language";
 import { useApi } from "../lib/use-api";
 import { useConfirm } from "../lib/use-confirm";
 
@@ -18,7 +26,6 @@ const COPY = {
     addAPhoto: "Add a photo",
     addPhoto: "add photo",
     adding: "adding…",
-    caption: "Caption",
     change: "change",
     close: "close",
     cuisine: "Cuisine",
@@ -27,12 +34,21 @@ const COPY = {
     noPlaces: (canAdd: boolean) =>
       `No places yet${canAdd ? ": add the first one below." : "."}`,
     noRestaurant: "No restaurant by that name on Google Maps.",
+    notes: "Notes",
     openMaps: "open in Google Maps",
-    openPhoto: (caption: string) =>
-      caption ? `Open photo: ${caption}` : "Open photo",
+    openPhoto: (notes: string) =>
+      notes ? `Open photo: ${notes}` : "Open photo",
     photo: "Photo",
     photosOf: (name: string) => `Photos of ${name}`,
     pickOne: "Pick one",
+    rated: {
+      food: "Food",
+      service: "Service",
+      toilet: "Toilets",
+      value: "Price for the food",
+    },
+    ratings: "ratings",
+    ratingsHint: "Tap a star again to leave it unrated.",
     removePhoto: "Remove this photo",
     removePlace: (name: string) => `remove ${name}`,
     restaurant: "Restaurant",
@@ -40,22 +56,20 @@ const COPY = {
     restaurants: "restaurants",
     search: "Search Google Maps by name",
     selected: "selected",
+    stars: (count: number) => `${count} out of 5`,
     sub: "Restaurants I've eaten at in Paris. Tap a pin or a name.",
     sure: "sure?",
     sureAgain: "sure? press again",
     surePhoto: "Sure? Press again to remove this photo",
     title: "Places I've been",
+    unrated: "not rated",
     uploading: "uploading…",
-    visited: (date: string) => `Visited ${date}`,
-    visitedOn: "Visited on",
-    whatIAte: "What I ate",
   },
   fr: {
     add: "ajouter le lieu",
     addAPhoto: "Ajouter une photo",
     addPhoto: "ajouter la photo",
     adding: "ajout…",
-    caption: "Légende",
     change: "changer",
     close: "fermer",
     cuisine: "Cuisine",
@@ -64,12 +78,21 @@ const COPY = {
     noPlaces: (canAdd: boolean) =>
       `Pas encore de lieux${canAdd ? " : ajoutez le premier ci-dessous." : "."}`,
     noRestaurant: "Aucun restaurant de ce nom sur Google Maps.",
+    notes: "Notes",
     openMaps: "ouvrir dans Google Maps",
-    openPhoto: (caption: string) =>
-      caption ? `Ouvrir la photo : ${caption}` : "Ouvrir la photo",
+    openPhoto: (notes: string) =>
+      notes ? `Ouvrir la photo : ${notes}` : "Ouvrir la photo",
     photo: "Photo",
     photosOf: (name: string) => `Photos de ${name}`,
     pickOne: "Choisir",
+    rated: {
+      food: "Cuisine",
+      service: "Service",
+      toilet: "Toilettes",
+      value: "Rapport qualité-prix",
+    },
+    ratings: "notes",
+    ratingsHint: "Touchez encore une étoile pour la laisser sans note.",
     removePhoto: "Retirer cette photo",
     removePlace: (name: string) => `retirer ${name}`,
     restaurant: "Restaurant",
@@ -77,31 +100,164 @@ const COPY = {
     restaurants: "restaurants",
     search: "Chercher sur Google Maps par nom",
     selected: "sélection",
+    stars: (count: number) => `${count} sur 5`,
     sub: "Les restaurants où j’ai mangé à Paris. Touchez une épingle ou un nom.",
     sure: "sûr ?",
     sureAgain: "sûr ? appuyez encore",
     surePhoto: "Sûr ? Appuyez encore pour retirer cette photo",
     title: "Où j’ai mangé",
+    unrated: "sans note",
     uploading: "envoi…",
-    visited: (date: string) => `Visité le ${date}`,
-    visitedOn: "Visité le",
-    whatIAte: "Ce que j’ai mangé",
   },
 };
 
-const visitedFormat = (language: Language) =>
-  new Intl.DateTimeFormat(LOCALES[language], {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric",
-  });
+const STARS = [1, 2, 3, 4, 5] as const;
 
-const VISITED = { en: visitedFormat("en"), fr: visitedFormat("fr") };
+const UNRATED: Ratings = {
+  food: null,
+  service: null,
+  toilet: null,
+  value: null,
+};
 
-/** "2026-10-12" → "12 October 2026" ("12 octobre 2026") */
-const visitedOf = (date: string | null, language: Language) =>
-  date ? VISITED[language].format(new Date(`${date}T12:00:00Z`)) : "";
+/** A rating to read: the stars up to it filled. */
+const StarsShown = ({ rated, value }: { rated: Rated; value: number }) => {
+  const t = useCopy(COPY);
+
+  return (
+    <div className="rating">
+      <span className="rating__label">{t.rated[rated]}</span>
+      <span className="stars" role="img" aria-label={t.stars(value)}>
+        {STARS.map((star) => (
+          <span key={star} className="star" data-on={star <= value}>
+            <Icon name="star" size={18} filled={star <= value} />
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+};
+
+/**
+ * A rating to set, one to five stars: tapping the star it is already at
+ * leaves it unrated.
+ */
+const StarsPicker = ({
+  rated,
+  value,
+  disabled = false,
+  onChange,
+}: {
+  rated: Rated;
+  value: number | null;
+  disabled?: boolean;
+  onChange: (value: number | null) => void;
+}) => {
+  const t = useCopy(COPY);
+
+  return (
+    <div className="rating">
+      <span className="rating__label" id={`rating-${rated}`}>
+        {t.rated[rated]}
+      </span>
+      <span
+        className="stars"
+        role="radiogroup"
+        aria-labelledby={`rating-${rated}`}
+      >
+        {STARS.map((star) => (
+          <button
+            key={star}
+            type="button"
+            role="radio"
+            aria-checked={value === star}
+            aria-label={t.stars(star)}
+            className="star star--pick"
+            data-on={value !== null && star <= value}
+            disabled={disabled}
+            onClick={() => onChange(value === star ? null : star)}
+          >
+            <Icon
+              name="star"
+              size={22}
+              filled={value !== null && star <= value}
+            />
+          </button>
+        ))}
+      </span>
+      <span className="rating__value">
+        {value === null ? t.unrated : t.stars(value)}
+      </span>
+    </div>
+  );
+};
+
+/** All four ratings, to set. */
+const RatingsPicker = ({
+  ratings,
+  disabled = false,
+  onChange,
+}: {
+  ratings: Ratings;
+  disabled?: boolean;
+  onChange: (ratings: Ratings) => void;
+}) => {
+  const t = useCopy(COPY);
+
+  return (
+    <fieldset className="ratings">
+      <legend className="tile__label">{t.ratings}</legend>
+      {RATED.map((rated) => (
+        <StarsPicker
+          key={rated}
+          rated={rated}
+          value={ratings[rated]}
+          disabled={disabled}
+          onChange={(value) => onChange({ ...ratings, [rated]: value })}
+        />
+      ))}
+      <p className="hint">{t.ratingsHint}</p>
+    </fieldset>
+  );
+};
+
+/** Admins only: the selected place's ratings, saved as each star is tapped. */
+const RatePlace = ({
+  place,
+  onRated,
+}: {
+  place: Place;
+  onRated: (ratings: Ratings) => void;
+}) => {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+
+  const change = async (ratings: Ratings) => {
+    setBusy(true);
+    setProblem("");
+
+    try {
+      onRated(await admin.ratePlace(place.id, ratings));
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <RatingsPicker
+        ratings={place.ratings}
+        disabled={busy}
+        onChange={change}
+      />
+      <p className="form__error" role="status">
+        {problem}
+      </p>
+    </>
+  );
+};
 
 const photoUrl = (photo: Photo, size: "large" | "thumb") =>
   `/api/photos/${photo.id}/${size}`;
@@ -129,7 +285,7 @@ const Viewer = ({
     <dialog
       ref={dialog}
       className="viewer"
-      aria-label={photo?.caption || t.photo}
+      aria-label={photo?.notes || t.photo}
       onClose={onClose}
       onClick={(event) => {
         if (event.target === dialog.current) {
@@ -143,10 +299,10 @@ const Viewer = ({
             src={photoUrl(photo, "large")}
             width={photo.width}
             height={photo.height}
-            alt={photo.caption}
+            alt={photo.notes}
           />
           <div className="viewer__foot">
-            <span>{photo.caption}</span>
+            <span className="viewer__notes">{photo.notes}</span>
             <button type="button" className="btn btn--pill" onClick={onClose}>
               <Icon name="close" size={16} />
               {t.close}
@@ -276,14 +432,13 @@ const RestaurantSearch = ({
   );
 };
 
-/** Admins only: a new place, picked from Google Maps, with its cuisine, date and dish. */
+/** Admins only: a new place, picked from Google Maps, with its cuisine and ratings. */
 const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
   // One Google session per restaurant searched for and added.
   const [session, setSession] = useState(() => crypto.randomUUID());
   const [chosen, setChosen] = useState<PickedPlace | null>(null);
   const [cuisine, setCuisine] = useState("");
-  const [visitedOn, setVisitedOn] = useState("");
-  const [dish, setDish] = useState("");
+  const [ratings, setRatings] = useState<Ratings>(UNRATED);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const language = useLanguage();
@@ -308,16 +463,14 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
       onAdded(
         await admin.addPlace({
           cuisine,
-          dish,
           placeId: chosen.placeId,
+          ratings,
           session,
-          visitedOn,
         })
       );
       setChosen(null);
       setCuisine("");
-      setVisitedOn("");
-      setDish("");
+      setRatings(UNRATED);
       setSession(crypto.randomUUID());
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "");
@@ -364,25 +517,8 @@ const AddPlace = ({ onAdded }: { onAdded: (place: Place) => void }) => {
               ))}
             </select>
           </label>
-          <label>
-            {t.visitedOn}
-            <input
-              className="field"
-              type="date"
-              value={visitedOn}
-              onChange={(event) => setVisitedOn(event.target.value)}
-            />
-          </label>
-          <label>
-            {t.whatIAte}
-            <input
-              className="field"
-              maxLength={120}
-              value={dish}
-              onChange={(event) => setDish(event.target.value)}
-            />
-          </label>
         </div>
+        <RatingsPicker ratings={ratings} onChange={setRatings} />
         <div className="form__actions">
           <button
             type="submit"
@@ -410,7 +546,7 @@ const AddPhoto = ({
   onAdded: (photo: Photo) => void;
 }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [caption, setCaption] = useState("");
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -427,9 +563,9 @@ const AddPhoto = ({
     setProblem("");
 
     try {
-      onAdded(await admin.addPhoto(place.id, file, caption));
+      onAdded(await admin.addPhoto(place.id, file, notes));
       setFile(null);
-      setCaption("");
+      setNotes("");
 
       if (input.current) {
         input.current.value = "";
@@ -454,12 +590,13 @@ const AddPhoto = ({
         />
       </label>
       <label>
-        {t.caption}
-        <input
-          className="field"
-          maxLength={120}
-          value={caption}
-          onChange={(event) => setCaption(event.target.value)}
+        {t.notes}
+        <textarea
+          className="field field--notes"
+          maxLength={500}
+          rows={3}
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
         />
       </label>
       <div className="form__actions">
@@ -605,18 +742,25 @@ export const PlacesScreen = () => {
                     </>
                   ) : null}
                 </span>
-                {place.visitedOn || place.dish ? (
-                  <span>
-                    {[
-                      place.visitedOn
-                        ? t.visited(visitedOf(place.visitedOn, language))
-                        : "",
-                      place.dish,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                ) : null}
+                {isAdmin ? (
+                  <RatePlace
+                    key={place.id}
+                    place={place}
+                    onRated={(ratings) =>
+                      update(place.id, (old) => ({ ...old, ratings }))
+                    }
+                  />
+                ) : (
+                  <div className="ratings">
+                    {RATED.map((rated) => {
+                      const value = place.ratings[rated];
+
+                      return value === null ? null : (
+                        <StarsShown key={rated} rated={rated} value={value} />
+                      );
+                    })}
+                  </div>
+                )}
                 {place.photos.length > 0 ? (
                   <ul className="photos" aria-label={t.photosOf(place.name)}>
                     {place.photos.map((photo) => (
@@ -624,7 +768,7 @@ export const PlacesScreen = () => {
                         <button
                           type="button"
                           className="photo"
-                          aria-label={t.openPhoto(photo.caption)}
+                          aria-label={t.openPhoto(photo.notes)}
                           onClick={() => setViewing(photo)}
                         >
                           <img
