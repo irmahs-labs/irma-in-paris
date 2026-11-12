@@ -46,8 +46,15 @@ export const autocompleteAnswer = z.object({
 });
 
 export const detailsAnswer = z.object({
+  // Google leaves out a list it has nothing for, so a part of the address
+  // can come with no types, or no text.
   addressComponents: z.optional(
-    z.array(z.object({ longText: z.string(), types: z.array(z.string()) }))
+    z.array(
+      z.object({
+        longText: z.optional(z.string()),
+        types: z.optional(z.array(z.string())),
+      })
+    )
   ),
   displayName: z.object({ text: z.string() }),
   formattedAddress: z.string(),
@@ -130,7 +137,7 @@ export const toGooglePlace = (
 
   const part = (type: string) =>
     answer.addressComponents?.find((component) =>
-      component.types.includes(type)
+      component.types?.includes(type)
     )?.longText;
 
   return {
