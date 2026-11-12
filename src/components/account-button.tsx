@@ -3,11 +3,13 @@ import { accountUrl, firstName, useSession } from "../lib/session";
 
 const COPY = {
   en: {
+    checking: "Checking who is signed in",
     signIn: "sign in",
     signedInAs: (email: string) => `Signed in as ${email}`,
     withGoogle: "sign in with Google",
   },
   fr: {
+    checking: "Vérification du compte connecté",
     signIn: "se connecter",
     signedInAs: (email: string) => `Compte connecté : ${email}`,
     withGoogle: "se connecter avec Google",
@@ -47,8 +49,18 @@ export const AccountButton = () => {
   const user = useSession();
   const t = useCopy(COPY);
 
+  // Still asking: a skeleton of the pill's size, so nothing jumps
   if (user === undefined) {
-    return null;
+    return (
+      <span
+        aria-busy="true"
+        aria-label={t.checking}
+        className="account account--loading"
+      >
+        <span className="account__icon" />
+        <span className="account__bar" />
+      </span>
+    );
   }
 
   const href = accountUrl(window.location.href);
