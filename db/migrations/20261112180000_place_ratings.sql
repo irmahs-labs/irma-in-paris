@@ -17,7 +17,8 @@ alter table place_photos
   add constraint place_photos_notes_check check (char_length(notes) <= 500);
 
 -- migrate:down
-update place_photos set notes = left(notes, 120);
+-- Only the notes too long for the old caption limit are shortened.
+update place_photos set notes = left(notes, 120) where char_length(notes) > 120;
 
 alter table place_photos
   drop constraint place_photos_notes_check,
