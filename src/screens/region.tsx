@@ -72,7 +72,7 @@ const WindArrow = ({ from }: { from: number }) => (
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2.6"
+    strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
     style={{ transform: `rotate(${from + 180}deg)` }}

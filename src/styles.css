@@ -2,8 +2,8 @@
    Colours are role tokens named by job (tokens.json in the design system),
    so one rule is right in both themes; <html data-theme> picks the set.
    Fredoka sets titles and Nunito Sans everything else; panels are flat with
-   2px outlines, and only the one action to press next carries the hard
-   shadow. */
+   2px outlines, and only the one action to press next is yellow (pop) and
+   carries the hard shadow. */
 :root {
   --ground: #f3f1c8;
   --panel: #f7f8de;
@@ -11,11 +11,15 @@
   --raised: #fffdf0;
   --raised-hover: #e8e1bd;
   --text: #2f3b34;
-  --text-muted: #3f6b30;
+  --text-muted: #335a26;
   --outline: #2f3b34;
   --accent: #d4dd9c;
   --accent-soft: #afc584;
   --on-accent: #2f3b34;
+  /* The one accent: a pastel butter yellow, for the call to action only */
+  --pop: #ffd968;
+  --pop-hover: #f5c94a;
+  --on-pop: #2f3b34;
   --strong: #3b4a42;
   --on-strong: #fff3cf;
   --selected: #afc584;
@@ -44,10 +48,13 @@
   --stroke-base: 1.5px;
   --stroke-panel: 2px;
   --line: var(--stroke-panel) solid var(--outline);
-  --radius-panel: 11px;
-  --radius-lg: 9px;
-  --radius-md: 7px;
+  /* Concentric corners: a 20px panel padded 12px holds 8px boxes and
+     fields, and what sits 6px inside those is all but square */
+  --radius-panel: 20px;
+  --radius-field: 8px;
   --radius-sm: 6px;
+  --radius-xs: 2px;
+  --space-group: 24px;
   --radius-pill: 999px;
 
   /* Fredoka sets titles and panel names, Nunito Sans everything else. */
@@ -59,24 +66,27 @@
   --map-icons: invert(1);
   /* Dark Matcha: a mid-tone matcha page, cards a step lighter, and the header,
      buttons and fields a darker well. Outlines and shadows stay near-black. */
-  --ground: #46574b;
-  --panel: #52645a;
+  --ground: #405045;
+  --panel: #4b5c51;
   --header: #2f3d34;
   --raised: #2f3d34;
   --raised-hover: #3a4a3f;
   --text: #f3f1c8;
-  --text-muted: #d4e396;
+  --text-muted: #dbe8a6;
   --outline: #0f1411;
   --accent: #c9d68f;
   --accent-soft: #9eb27a;
   --on-accent: #0f1411;
+  --pop: #ffe08a;
+  --pop-hover: #ffd666;
+  --on-pop: #0f1411;
   --strong: #1c2420;
   --on-strong: #f3f1c8;
   --selected: #c9d68f;
   --on-selected: #0f1411;
   --grid: #2f3b34;
   --pattern-dot: #b8d97000;
-  --pattern-line: #4d5f52;
+  --pattern-line: #4a5b4f;
   --focus: #c2d8f5;
   --danger: #f6a49d;
   color-scheme: dark;
@@ -197,6 +207,7 @@ a:hover {
   display: block;
   margin: 0;
   font: 600 24px/1.1 var(--display);
+  text-wrap: balance;
 }
 .app-header__by {
   display: block;
@@ -296,7 +307,7 @@ a:hover {
   position: absolute;
   top: -12px;
   left: 16px;
-  padding: 2px 12px;
+  padding: 3px 12px 1px;
   border-radius: var(--radius-pill);
   background: var(--strong);
   color: var(--on-strong);
@@ -328,20 +339,25 @@ a:hover {
   background: var(--panel);
   color: var(--text);
 }
-/* Only the one action to press next carries the hard shadow. */
-.btn--primary,
-.btn--primary:not(:disabled):hover {
-  background: var(--accent);
-  color: var(--on-accent);
+/* Only the one action to press next is yellow, 48px tall, on the hard
+   shadow it sinks into when pressed. */
+.btn--primary {
+  min-height: 48px;
+  background: var(--pop);
+  color: var(--on-pop);
   box-shadow: var(--shadow-hard);
+  transition:
+    background 0.15s,
+    transform 0.08s,
+    box-shadow 0.08s;
 }
 .btn--primary:not(:disabled):hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 #0f1411;
+  background: var(--pop-hover);
+  color: var(--on-pop);
 }
 .btn--primary:not(:disabled):active {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 var(--outline);
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #0f1411;
 }
 .btn--quiet {
   background: transparent;
@@ -407,14 +423,11 @@ a:hover {
 }
 
 /* ── hub ── */
-/* The foot of every page: small and quiet, under a hairline. */
+/* Cute Matcha's Footer: where to find more apps, on a small paper pill. */
 .site-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   width: fit-content;
   margin: 8px auto 32px;
-  padding: 6px 14px 6px 10px;
+  padding: 6px 14px;
   border: var(--line);
   border-radius: 999px;
   background-color: var(--panel);
@@ -422,7 +435,8 @@ a:hover {
   font-size: 14px;
 }
 .site-foot a {
-  color: inherit;
+  color: var(--text);
+  font-weight: 700;
   text-decoration: none;
 }
 .site-foot a:hover {
@@ -444,7 +458,7 @@ a:hover {
   margin: 0;
   padding: 0 12px;
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-field);
   background: var(--raised);
   font-size: 15px;
 }
@@ -484,7 +498,7 @@ select.field {
   flex: 0 0 260px;
   min-width: 0;
   margin: 0;
-  padding: 14px 16px 16px;
+  padding: 16px 12px 12px;
 }
 .side__list {
   display: flex;
@@ -502,7 +516,7 @@ select.field {
   min-height: 56px;
   padding: 8px 14px;
   border: var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-field);
   background: var(--raised);
   color: var(--text);
   font: 700 15px/1.2 var(--body);
@@ -563,7 +577,7 @@ select.field {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 28px 20px 20px;
+  padding: 16px 12px 12px;
 }
 .window--wide {
   flex: 2 1 600px;
@@ -587,7 +601,7 @@ select.field {
   background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
 }
 .tile__label {
   font: 600 12px/1.2 var(--display);
@@ -648,7 +662,7 @@ select.field {
   background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) dashed var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -845,7 +859,7 @@ select.field {
   display: flex;
   overflow: hidden;
   border: var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-field);
   background: var(--raised);
 }
 .segmented button {
@@ -879,7 +893,7 @@ select.field {
   padding: 6px;
   background: var(--raised);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-field);
 }
 .stop {
   display: flex;
@@ -888,7 +902,7 @@ select.field {
   min-height: 40px;
   padding: 6px 10px;
   border: var(--stroke-base) solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text);
   font: 500 14px/1.2 var(--body);
@@ -919,7 +933,7 @@ select.field {
   background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-field);
 }
 .result__head {
   display: flex;
@@ -950,7 +964,7 @@ select.field {
   padding: 10px 12px;
   background: var(--raised);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
 }
 .train:first-child {
   background: var(--selected);
@@ -967,7 +981,7 @@ select.field {
   background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
 }
 .feed__row {
   display: flex;
@@ -1034,7 +1048,7 @@ select.field {
   overflow: hidden;
   background: var(--ground);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
 }
 /* The region needs room for 29 towns, most of them close to Paris. */
 .map--idf {
@@ -1050,7 +1064,7 @@ select.field {
   overflow: hidden;
   background: var(--raised);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-field);
   box-shadow: none;
 }
 .map .maplibregl-ctrl-group button + button {
@@ -1120,7 +1134,7 @@ select.field {
   background: var(--ground);
   color: var(--text);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-field);
 }
 .card__name {
   font: 600 22px/1.15 var(--display);
@@ -1221,7 +1235,7 @@ select.field {
   padding: 12px 14px;
   background: var(--ground);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
 }
 .legend-key ul {
   display: flex;
@@ -1247,7 +1261,7 @@ select.field {
   overflow-x: auto;
   background: var(--ground);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
 }
 .table-view table {
   width: 100%;
@@ -1280,7 +1294,7 @@ select.field {
   flex-direction: column;
   gap: 12px;
   margin: 0;
-  padding: 20px 16px 16px;
+  padding: 16px 12px 12px;
 }
 .places__list {
   display: flex;
@@ -1298,7 +1312,7 @@ select.field {
   min-height: 52px;
   padding: 8px 12px;
   border: var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-field);
   background: var(--raised);
   color: var(--text);
   text-align: left;
@@ -1462,7 +1476,7 @@ select.field {
   list-style: none;
   background: var(--raised);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-field);
 }
 .search__option {
   display: flex;
@@ -1472,7 +1486,7 @@ select.field {
   min-height: 44px;
   padding: 8px 10px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -1490,7 +1504,7 @@ select.field {
   padding: 12px 14px;
   background: var(--ground);
   border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
 }
 .chosen .tile__label {
   flex-basis: 100%;
@@ -1502,7 +1516,7 @@ select.field {
   min-height: 72px;
   padding: 12px;
   border: var(--stroke-base) dashed var(--outline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-field);
   background: var(--raised);
   color: var(--text);
   text-align: center;
@@ -1595,5 +1609,39 @@ select.field {
   *::before,
   *::after {
     transition: none !important;
+  }
+}
+
+/* The account pill while the session is asked for: a skeleton of its exact
+   size, so nothing moves when the answer comes. */
+.account--loading {
+  pointer-events: none;
+}
+.account--loading .account__icon {
+  background: var(--raised-hover);
+}
+.account__bar {
+  width: 56px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--raised-hover);
+  animation: account-pulse 1.2s ease-in-out infinite;
+}
+@keyframes account-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (max-width: 600px) {
+  .account__bar {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account__bar {
+    animation: none;
+  }
+  .btn--primary:not(:disabled):active {
+    transform: none;
   }
 }

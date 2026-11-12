@@ -37,7 +37,7 @@ interface IconProps {
   weight?: number;
 }
 
-export const Icon = ({ name, size = 22, weight = 2.2 }: IconProps) => (
+export const Icon = ({ name, size = 22, weight = 2 }: IconProps) => (
   <svg
     aria-hidden="true"
     width={size}

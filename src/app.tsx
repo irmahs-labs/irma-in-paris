@@ -84,7 +84,7 @@ const Menu = ({ path }: { path: string }) => {
                 className="side__item"
                 aria-current={section.path === path ? "page" : undefined}
               >
-                <Icon name={section.icon} size={20} weight={2} />
+                <Icon name={section.icon} size={20} />
                 <span className="side__text">
                   <span>{section.name[language]}</span>
                   <span className="side__hint">{section.hint[language]}</span>
