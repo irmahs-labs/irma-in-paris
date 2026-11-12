@@ -36,6 +36,8 @@ interface ParisMapProps {
   label: string;
   /** Which map: Paris up close (the default), or Île-de-France from afar. */
   file?: MapFile;
+  /** The pins are framed again whenever this changes: a new set of pins, not a refresh. */
+  frame?: string;
 }
 
 // Lets MapLibre read pmtiles:// sources, once for the whole page.
@@ -56,14 +58,21 @@ const ZOOMS: Record<MapFile, { min: number; max: number; start: number }> = {
  * (OpenStreetMap data), drawn by MapLibre in Light or Dark Matcha, with the
  * pins as React buttons on top. Nothing is asked of any other site.
  */
-const ParisMap = ({ markers, focus, label, file = "paris" }: ParisMapProps) => {
+const ParisMap = ({
+  markers,
+  focus,
+  label,
+  file = "paris",
+  frame = "",
+}: ParisMapProps) => {
   const theme = useTheme();
   const box = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<MapLibre | null>(null);
   // One element per marker, kept across renders so React can portal into it.
   const [elements] = useState(() => new Map<string, HTMLElement>());
   const placed = useRef(new Map<string, Marker>());
-  const fitted = useRef(false);
+  // The frame the pins were last fitted to; null before the first time.
+  const fitted = useRef<string | null>(null);
 
   const elementFor = (id: string) => {
     let element = elements.get(id);
@@ -141,8 +150,8 @@ const ParisMap = ({ markers, focus, label, file = "paris" }: ParisMapProps) => {
       }
     }
 
-    // The first time there are pins, frame them all.
-    if (!fitted.current && markers.length > 0) {
+    // The first time there are pins, and for each new frame, show them all.
+    if (fitted.current !== frame && markers.length > 0) {
       const bounds = new LngLatBounds();
 
       for (const marker of markers) {
@@ -152,9 +161,10 @@ const ParisMap = ({ markers, focus, label, file = "paris" }: ParisMapProps) => {
       map.fitBounds(bounds, {
         animate: false,
         maxZoom: Math.min(15, ZOOMS[file].max),
-        padding: 24,
+        // Pins stand above their point, so more room at the top.
+        padding: { bottom: 24, left: 32, right: 32, top: 56 },
       });
-      fitted.current = true;
+      fitted.current = frame;
     }
   });
 

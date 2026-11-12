@@ -8,9 +8,11 @@ import type { IconName } from "./lib/icon";
 import { useCopy, useLanguage } from "./lib/language";
 import type { Language } from "./lib/language";
 import { Link, usePath, withoutTrailingSlashes } from "./lib/router";
+import { BusesScreen } from "./screens/buses";
 import { PlacesScreen } from "./screens/places";
+import { RailScreen } from "./screens/rail";
 import { RegionScreen } from "./screens/region";
-import { TransportScreen } from "./screens/transport";
+import { VelibScreen } from "./screens/velib";
 import { WeatherScreen } from "./screens/weather";
 
 interface Section {
@@ -34,14 +36,34 @@ const SECTIONS: readonly Section[] = [
     path: "/",
   },
   {
-    Screen: TransportScreen,
+    Screen: RailScreen,
     hint: {
-      en: "Metro, line status, Vélib'",
-      fr: "Métro, état des lignes, Vélib'",
+      en: "Metro, RER, tram, Transilien",
+      fr: "Métro, RER, tram, Transilien",
     },
     icon: "train",
-    name: { en: "public transport", fr: "transports en commun" },
+    name: { en: "rail", fr: "rail" },
     path: "/transport",
+  },
+  {
+    Screen: BusesScreen,
+    hint: {
+      en: "Any line, or the stops near you",
+      fr: "Toutes les lignes, ou les arrêts près de vous",
+    },
+    icon: "bus",
+    name: { en: "buses", fr: "bus" },
+    path: "/buses",
+  },
+  {
+    Screen: VelibScreen,
+    hint: {
+      en: "Bikes and free docks",
+      fr: "Vélos et bornes libres",
+    },
+    icon: "bike",
+    name: { en: "Vélib'", fr: "Vélib'" },
+    path: "/velib",
   },
   {
     Screen: RegionScreen,
@@ -67,7 +89,7 @@ const MENU_COPY = {
   fr: { menu: "menu", sections: "rubriques" },
 };
 
-/** The three sections, as a side menu on a wide screen and a row of buttons on a phone. */
+/** The sections, as a side menu on a wide screen and a row of buttons on a phone. */
 const Menu = ({ path }: { path: string }) => {
   const language = useLanguage();
   const t = useCopy(MENU_COPY);

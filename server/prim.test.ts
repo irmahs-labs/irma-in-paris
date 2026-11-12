@@ -3,7 +3,18 @@ import type * as z from "zod/mini";
 
 import { lineOf } from "../src/data/lines";
 import {
+  busDeparturesAnswer,
   departuresAnswer,
+  journeysAnswer,
+  lineSearchAnswer,
+  mergeCalls,
+  routesAnswer,
+  toBusLines,
+  toCalls,
+  toDirections,
+  toNearbyDepartures,
+  toTrips,
+  vehicleJourneysAnswer,
   describe as describeDisruption,
   lineReportsAnswer,
   linesAnswer,
@@ -96,6 +107,23 @@ describe("toLines", () => {
     });
   });
 
+  it("keeps a tram's code as PRIM writes it, T3a before T3b", () => {
+    const answer = linesAnswer.parse({
+      lines: [
+        { code: "T3b", id: "t3b" },
+        { code: "T10", id: "t10" },
+        { code: "T3a", id: "t3a" },
+        { code: "1", id: "m1" },
+      ],
+    });
+
+    expect(toLines("tram", answer).map((line) => line.key)).toEqual([
+      "tram:T3a",
+      "tram:T3b",
+      "tram:T10",
+    ]);
+  });
+
   it("keeps trams and TER out of RER and Transilien", () => {
     const answer = linesAnswer.parse({
       lines: [
@@ -118,9 +146,17 @@ describe("toStops", () => {
     const stops = toStops(
       stopAreasAnswer.parse({
         stop_areas: [
-          { id: "3", name: "Saint-Paul" },
-          { id: "1", name: "Étoile" },
-          { id: "2", name: "Bastille" },
+          {
+            coord: { lat: "48.8551", lon: "2.3608" },
+            id: "3",
+            name: "Saint-Paul",
+          },
+          { coord: { lat: "48.8738", lon: "2.295" }, id: "1", name: "Étoile" },
+          {
+            coord: { lat: "48.8531", lon: "2.3691" },
+            id: "2",
+            name: "Bastille",
+          },
         ],
       })
     );
@@ -129,6 +165,262 @@ describe("toStops", () => {
       "Bastille",
       "Étoile",
       "Saint-Paul",
+    ]);
+    expect(stops[0]).toEqual({
+      id: "2",
+      lat: 48.8531,
+      lon: 2.3691,
+      name: "Bastille",
+    });
+  });
+});
+
+const route = (id: string, name: string, towards: string, way: string) => ({
+  direction: { name: towards },
+  direction_type: way,
+  id,
+  name,
+});
+
+/** Metro 7's routes as PRIM lists them, a short run and a variant included. */
+const METRO_7_ROUTES = routesAnswer.parse({
+  routes: [
+    route(
+      "r1",
+      "La Courneuve - 8 Mai 1945",
+      "La Courneuve - 8 Mai 1945 (La Courneuve)",
+      "inbound"
+    ),
+    route(
+      "r2",
+      "La Courneuve - 8 Mai 1945",
+      "Place d'Italie (Paris)",
+      "inbound"
+    ),
+    route("r3", "Mairie d'Ivry", "Mairie d'Ivry (Ivry-sur-Seine)", "outbound"),
+    route(
+      "r4",
+      "Villejuif - Louis Aragon",
+      "Villejuif - Louis Aragon (Villejuif)",
+      "outbound"
+    ),
+    route(
+      "r5",
+      "Villejuif - Louis Aragon",
+      "Villejuif - Louis Aragon (Villejuif)",
+      "outbound"
+    ),
+  ],
+});
+
+describe("toDirections", () => {
+  it("names each way by its termini, leaving out short runs and repeats", () => {
+    expect(toDirections(METRO_7_ROUTES)).toEqual([
+      { id: "inbound", towards: "La Courneuve - 8 Mai 1945" },
+      { id: "outbound", towards: "Mairie d'Ivry / Villejuif - Louis Aragon" },
+    ]);
+  });
+
+  it("takes every route that way when none is named after where it goes", () => {
+    const tram = routesAnswer.parse({
+      routes: [
+        route(
+          "r1",
+          "Asnières - Noisy",
+          "Noisy-le-Sec (Noisy-le-Sec)",
+          "inbound"
+        ),
+      ],
+    });
+
+    expect(toDirections(tram)).toEqual([
+      { id: "inbound", towards: "Noisy-le-Sec" },
+    ]);
+  });
+});
+
+const stopAt = (id: string) => ({
+  stop_point: {
+    stop_area: { coord: { lat: "48.85", lon: "2.35" }, id, name: id },
+  },
+});
+
+/** Stops named by one letter each: "abc" → a, b, c. */
+const lettered = (ids: string) =>
+  [...ids].map((id) => ({ id, lat: 0, lon: 0, name: id }));
+
+describe("toCalls and mergeCalls", () => {
+  it("takes a route's longest journey, in the order it calls", () => {
+    const calls = toCalls(
+      vehicleJourneysAnswer.parse({
+        vehicle_journeys: [
+          { stop_times: ["b", "c"].map(stopAt) },
+          { stop_times: ["a", "b", "c", "d"].map(stopAt) },
+        ],
+      })
+    );
+
+    expect(calls.map((stop) => stop.id)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("puts a branch that splits off after the trunk, and one that joins before it", () => {
+    // Trunk a-b-c, then on to d-e, or off to x-y.
+    expect(
+      mergeCalls([lettered("abcde"), lettered("abcxy")]).map((stop) => stop.id)
+    ).toEqual([..."abcdexy"]);
+    // From d-e or from x-y, then the trunk c-b-a.
+    expect(
+      mergeCalls([lettered("edcba"), lettered("yxcba")]).map((stop) => stop.id)
+    ).toEqual([..."edyxcba"]);
+  });
+});
+
+const ride = (
+  leaves: string,
+  arrives: string,
+  direction: string,
+  freshness = "realtime"
+) => ({
+  sections: [
+    { type: "crow_fly" },
+    {
+      arrival_date_time: arrives,
+      data_freshness: freshness,
+      departure_date_time: leaves,
+      display_informations: { direction },
+      type: "public_transport",
+    },
+    { type: "crow_fly" },
+  ],
+});
+
+describe("toTrips", () => {
+  it("keeps direct trains only, once each, soonest first, with when they arrive", () => {
+    const trips = toTrips(
+      journeysAnswer.parse({
+        context: { current_datetime: "20261112T192422" },
+        journeys: [
+          ride(
+            "20261112T193000",
+            "20261112T193950",
+            "Cergy le Haut (Cergy)",
+            "base_schedule"
+          ),
+          ride(
+            "20261112T192800",
+            "20261112T193410",
+            "Saint-Nom-la-Bretèche - Forêt de Marly (L'Étang-la-Ville)"
+          ),
+          ride("20261112T193000", "20261112T193955", "Cergy le Haut (Cergy)"),
+          {
+            sections: [
+              {
+                ...ride("20261112T192600", "20261112T193000", "Asnières")
+                  .sections[1],
+                type: "public_transport",
+              },
+              { type: "transfer" },
+              {
+                ...ride("20261112T193200", "20261112T193800", "Bécon")
+                  .sections[1],
+                type: "public_transport",
+              },
+            ],
+          },
+        ],
+      })
+    );
+
+    expect(trips).toEqual([
+      {
+        arrives: "19:34",
+        at: "19:28",
+        live: true,
+        minutes: 3,
+        towards: "Saint-Nom-la-Bretèche - Forêt de Marly",
+      },
+      {
+        arrives: "19:39",
+        at: "19:30",
+        live: false,
+        minutes: 5,
+        towards: "Cergy le Haut",
+      },
+    ]);
+  });
+});
+
+const line = (id: string, code: string, mode: string) => ({
+  embedded_type: "line",
+  line: {
+    code,
+    color: "FF1400",
+    id,
+    network: { name: "Network" },
+    physical_modes: [{ id: mode }],
+    text_color: "FFFFFF",
+  },
+});
+
+describe("toBusLines", () => {
+  it("keeps buses only, the line whose code is exactly what was typed first", () => {
+    const buses = toBusLines(
+      "72",
+      lineSearchAnswer.parse({
+        pt_objects: [
+          line("b723", "723", "physical_mode:Bus"),
+          line("t72", "T72", "physical_mode:Tramway"),
+          line("b72", "72", "physical_mode:Bus"),
+        ],
+      })
+    );
+
+    expect(buses.map((bus) => bus.id)).toEqual(["b72", "b723"]);
+    expect(buses[0]).toEqual({
+      code: "72",
+      colour: "#ff1400",
+      id: "b72",
+      ink: "#ffffff",
+      network: "Network",
+    });
+  });
+});
+
+const bus = (code: string, direction: string, time: string) => ({
+  display_informations: {
+    code,
+    color: "FF1400",
+    direction,
+    text_color: "FFFFFF",
+  },
+  stop_date_time: { departure_date_time: time },
+});
+
+describe("toNearbyDepartures", () => {
+  it("groups a stop's next buses by line and where they go, soonest first, none more than 90 minutes off", () => {
+    const departures = toNearbyDepartures(
+      busDeparturesAnswer.parse({
+        context: { current_datetime: "20261112T192000" },
+        departures: [
+          bus("72", "Gare de Lyon (Paris)", "20261112T192600"),
+          bus("76", "Châtelet (Paris)", "20261112T192300"),
+          bus("72", "Gare de Lyon (Paris)", "20261112T193300"),
+          bus("N52", "Gare de Cormeilles (Cormeilles)", "20261112T233000"),
+        ],
+      })
+    );
+
+    expect(departures).toEqual([
+      {
+        line: { code: "76", colour: "#ff1400", ink: "#ffffff" },
+        minutes: [3],
+        towards: "Châtelet",
+      },
+      {
+        line: { code: "72", colour: "#ff1400", ink: "#ffffff" },
+        minutes: [6, 13],
+        towards: "Gare de Lyon",
+      },
     ]);
   });
 });
@@ -162,6 +454,28 @@ describe("toDepartures", () => {
         },
       ],
     });
+  });
+
+  it("keeps only the trains going one way when it is given", () => {
+    const answer = departuresAnswer.parse({
+      context: { current_datetime: "20261028T143000" },
+      departures: [
+        {
+          ...departure("20261028T143200", "Mairie d'Ivry (Ivry-sur-Seine)"),
+          route: { direction_type: "outbound" },
+        },
+        {
+          ...departure("20261028T143300", "La Courneuve - 8 Mai 1945"),
+          route: { direction_type: "inbound" },
+        },
+      ],
+    });
+
+    expect(
+      toDepartures(answer, NOW, "outbound").directions.map(
+        (direction) => direction.towards
+      )
+    ).toEqual(["Mairie d'Ivry"]);
   });
 
   it("counts across midnight", () => {

@@ -1,12 +1,14 @@
 # Irma in Paris
 
-Paris right now, at **https://irma-in-paris.irmahs.dev**: the weather, the next train on every metro, RER and Transilien line, Vélib' bikes and line status, and the restaurants I've eaten at, on a map, with photos.
+Paris right now, at **https://irma-in-paris.irmahs.dev**: the weather, the next train on every metro, RER, tram and Transilien line and the lines in trouble, any bus, Vélib' bikes, and the restaurants I've eaten at, on a map, with photos.
 
 | Section | Path | From |
 | --- | --- | --- |
 | Weather | `/` | [Open-Meteo](https://open-meteo.com) (no key) |
 | Île-de-France | `/region` | [Open-Meteo](https://open-meteo.com) for 29 towns: temperature, humidity, wind, the European AQI and pollen ([Copernicus CAMS](https://atmosphere.copernicus.eu)) (no key) |
-| Public transport | `/transport` | [PRIM](https://prim.iledefrance-mobilites.fr), Île-de-France Mobilités (key), and Vélib' Métropole's stations from [Paris Data](https://opendata.paris.fr/explore/dataset/velib-disponibilite-en-temps-reel/), the City of Paris's copy of Vélib's feed, updated every minute (no key; Vélib's own feed turns the server away with a 403) |
+| Rail | `/transport` | [PRIM](https://prim.iledefrance-mobilites.fr), Île-de-France Mobilités (key): metro, RER, tram and Transilien |
+| Buses | `/buses` | [PRIM](https://prim.iledefrance-mobilites.fr) (key): any bus line, and the stops near you |
+| Vélib' | `/velib` | Vélib' Métropole's stations from [Paris Data](https://opendata.paris.fr/explore/dataset/velib-disponibilite-en-temps-reel/), the City of Paris's copy of Vélib's feed, updated every minute (no key; Vélib's own feed turns the server away with a 403) |
 | Places I've been | `/places` | This app's Postgres, photos in Garage; restaurants picked from [Google Maps' Places API](https://developers.google.com/maps/documentation/places/web-service) (key) |
 
 The maps are [Protomaps](https://protomaps.com)' OpenStreetMap basemap, drawn by [MapLibre](https://maplibre.org) in Light and Dark Matcha from one file the app serves itself: no map service is asked anything.
@@ -20,7 +22,7 @@ Built with Vite, React 19 and Hono on Node 24, Postgres 17 with dbmate, Garage f
 - **On the server:** GitHub → this repo → Settings → Secrets and variables → Actions → New repository secret, named **`PRIM_API_KEY`**. The deploy writes it to `.env` on the server; it never reaches the browser. Re-run the deploy (Actions → Deploy → Run workflow) after adding or changing it.
 - **Locally:** the `PRIM_API_KEY=` line in `.env` (copied from `.env.example`, ignored by git).
 
-Without it everything else works, and the transport screen says live times are off.
+Without it everything else works, and the rail and bus screens say live times are off.
 
 ## The Google Maps key
 

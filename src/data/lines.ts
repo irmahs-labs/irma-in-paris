@@ -1,17 +1,17 @@
 import type { Language } from "../lib/language";
 
 /**
- * Every metro, RER and Transilien line, in the order the screen lists them.
+ * Every metro, RER, tram and Transilien line, in the order the screen lists them.
  * PRIM gives each line's id and colours when it answers; these colours are
  * the network's own, for when it does not.
  */
-export type Mode = "metro" | "rer" | "transilien";
+export type Mode = "metro" | "rer" | "tram" | "transilien";
 
 export interface TransitLine {
-  /** "metro:3B", "rer:A", "transilien:H": a line's id in this app. */
+  /** "metro:3B", "rer:A", "tram:T3a", "transilien:H": a line's id in this app. */
   key: string;
   mode: Mode;
-  /** As riders know it: "1", "3B", "A", "H". */
+  /** As riders know it: "1", "3B", "A", "T3a", "H". */
   code: string;
   title: string;
   colour: string;
@@ -23,11 +23,11 @@ const DARK = "#000000";
 const LIGHT = "#ffffff";
 
 const MODE_NAMES = {
-  en: { metro: "Metro", rer: "RER", transilien: "Transilien" },
-  fr: { metro: "Métro", rer: "RER", transilien: "Transilien" },
+  en: { metro: "Metro", rer: "RER", tram: "Tram", transilien: "Transilien" },
+  fr: { metro: "Métro", rer: "RER", tram: "Tram", transilien: "Transilien" },
 } satisfies Record<Language, Record<Mode, string>>;
 
-export const MODES: readonly Mode[] = ["metro", "rer", "transilien"];
+export const MODES: readonly Mode[] = ["metro", "rer", "tram", "transilien"];
 
 export const modeName = (mode: Mode, language: Language = "en") =>
   MODE_NAMES[language][mode];
@@ -78,6 +78,21 @@ export const LINES: readonly TransitLine[] = [
   lineOf("rer", "C", "#ffce00", DARK),
   lineOf("rer", "D", "#00814f", LIGHT),
   lineOf("rer", "E", "#c04191", LIGHT),
+  lineOf("tram", "T1", "#0055c8", LIGHT),
+  lineOf("tram", "T2", "#a0006e", LIGHT),
+  lineOf("tram", "T3a", "#ff5a00", DARK),
+  lineOf("tram", "T3b", "#00643c", LIGHT),
+  lineOf("tram", "T4", "#dc9600", DARK),
+  lineOf("tram", "T5", "#640082", LIGHT),
+  lineOf("tram", "T6", "#ff0000", LIGHT),
+  lineOf("tram", "T7", "#6e491e", LIGHT),
+  lineOf("tram", "T8", "#6e6e00", LIGHT),
+  lineOf("tram", "T9", "#3c91dc", LIGHT),
+  lineOf("tram", "T10", "#6e6e00", LIGHT),
+  lineOf("tram", "T11", "#ff5a00", DARK),
+  lineOf("tram", "T12", "#a50034", LIGHT),
+  lineOf("tram", "T13", "#8d653d", LIGHT),
+  lineOf("tram", "T14", "#00a092", LIGHT),
   lineOf("transilien", "H", "#8d5e2a", LIGHT),
   lineOf("transilien", "J", "#d5c900", DARK),
   lineOf("transilien", "K", "#9a9940", LIGHT),
@@ -88,11 +103,11 @@ export const LINES: readonly TransitLine[] = [
   lineOf("transilien", "U", "#b90845", LIGHT),
 ];
 
-/** A code's leading number: "3B" → 3, "14" → 14, "A" → NaN. */
+/** A code's leading number: "3B" → 3, "14" → 14, "T3a" → 3, "A" → NaN. */
 const numberOf = (code: string) =>
-  Number(code.match(/^\d+/u)?.[0] ?? Number.NaN);
+  Number(code.match(/^T?(?<number>\d+)/u)?.groups?.number ?? Number.NaN);
 
-/** Metro lines by number, then 3bis after 3 and 7bis after 7; letters A to Z. */
+/** Metro and tram lines by number, then 3bis after 3 and T3a before T3b; letters A to Z. */
 export const lineOrder = (a: TransitLine, b: TransitLine) =>
   MODES.indexOf(a.mode) - MODES.indexOf(b.mode) ||
   numberOf(a.code) - numberOf(b.code) ||
