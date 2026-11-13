@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CENTRAL_PARIS } from "../src/lib/map";
 import {
   fetchVelib,
+  nearUrl,
   recordsUrl,
   spreadOut,
   stationsAnswer,
@@ -71,7 +72,7 @@ describe("fetchVelib", () => {
   it("asks the portal for the stations inside the map's box only", async () => {
     const asked: string[] = [];
 
-    const report = await fetchVelib((url) => {
+    const report = await fetchVelib(undefined, (url) => {
       asked.push(String(url));
 
       return Promise.resolve(Response.json(RECORDS));
@@ -86,9 +87,30 @@ describe("fetchVelib", () => {
     expect(report.stations.map((entry) => entry.id)).toEqual(["4001"]);
   });
 
+  it("asks for the stations nearest a point, the nearest first, closed ones left out", async () => {
+    const asked: string[] = [];
+
+    const report = await fetchVelib({ lat: 48.905, lon: 2.269 }, (url) => {
+      asked.push(String(url));
+
+      return Promise.resolve(Response.json(RECORDS));
+    });
+
+    const query = new URL(asked[0] ?? "").searchParams;
+
+    expect(asked[0]).toBe(nearUrl(48.905, 2.269));
+    expect(query.get("where")).toBe(
+      "within_distance(coordonnees_geo, geom'POINT(2.269 48.905)', 1000m)"
+    );
+    expect(query.get("order_by")).toBe(
+      "distance(coordonnees_geo, geom'POINT(2.269 48.905)')"
+    );
+    expect(report.stations.map((entry) => entry.id)).toEqual(["4001"]);
+  });
+
   it("says what the portal answered when it refuses", async () => {
     await expect(
-      fetchVelib(() =>
+      fetchVelib(undefined, () =>
         Promise.resolve(new Response("<!DOCTYPE html>", { status: 403 }))
       )
     ).rejects.toThrow("Vélib' answered 403");

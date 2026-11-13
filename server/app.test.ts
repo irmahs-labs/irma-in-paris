@@ -651,39 +651,90 @@ describe("transport", () => {
     const lines = await jsonOf(app.request("/api/transport/lines"));
 
     expect(lines.live).toBe(false);
-    expect(lines.lines).toHaveLength(29);
+    expect(lines.lines).toHaveLength(44);
+  });
+
+  const CHATELET = {
+    id: "stop_area:IDFM:71264",
+    lat: 48.8584,
+    lon: 2.3475,
+    name: "Châtelet",
+  };
+
+  const BECON = {
+    id: "stop_area:IDFM:72124",
+    lat: 48.9047,
+    lon: 2.2689,
+    name: "Bécon les Bruyères",
+  };
+
+  const BUS_72 = {
+    code: "72",
+    colour: "#ff1400",
+    id: "line:IDFM:C01107",
+    ink: "#ffffff",
+    network: "La Défense - Saint Cloud",
+  };
+
+  /** Stands in for PRIM: metro 1 stops at Châtelet and Bécon, bus 72 at Châtelet. */
+  const livePrim = (asked: string[] = []): Prim => ({
+    busLine: (lineId) => Promise.resolve(lineId === BUS_72.id ? BUS_72 : null),
+    busesNear: (lat, lon) => {
+      asked.push(`near ${lat},${lon}`);
+
+      return Promise.resolve([]);
+    },
+    departures: (lineId, stopId, way) => {
+      asked.push(`departures ${lineId} ${stopId} ${way ?? "any"}`);
+
+      return Promise.resolve({
+        directions: [
+          { towards: "La Défense", trains: [{ at: "14:31", minutes: 1 }] },
+        ],
+      });
+    },
+    directions: () =>
+      Promise.resolve([
+        { id: "outbound", towards: "La Défense" },
+        { id: "inbound", towards: "Château de Vincennes" },
+      ]),
+    lines: () => Promise.resolve([METRO_1]),
+    searchBuses: (query) => Promise.resolve(query === "72" ? [BUS_72] : []),
+    statuses: (lines) =>
+      Promise.resolve(
+        lines.map((line) => ({
+          detail: {
+            en: "Traffic normal on the whole line",
+            fr: "Trafic normal sur l’ensemble de la ligne",
+          },
+          key: line.key,
+          level: "ok" as const,
+        }))
+      ),
+    stops: (lineId) =>
+      Promise.resolve(lineId === METRO_1.prim ? [BECON, CHATELET] : [CHATELET]),
+    stopsTowards: (_lineId, way) =>
+      Promise.resolve(
+        way === "outbound" ? [CHATELET, BECON] : [BECON, CHATELET]
+      ),
+    trips: (lineId, from, to) => {
+      asked.push(`trips ${lineId} ${from} ${to}`);
+
+      return Promise.resolve([
+        {
+          arrives: "19:34",
+          at: "19:28",
+          live: true,
+          minutes: 3,
+          towards: "Cergy le Haut",
+        },
+      ]);
+    },
   });
 
   it("asks PRIM only for a stop on that line, as PRIM lists it", async () => {
     const asked: string[] = [];
-
-    const prim: Prim = {
-      departures: (line, stopId) => {
-        asked.push(`${line.key} ${stopId}`);
-
-        return Promise.resolve({
-          directions: [
-            { towards: "La Défense", trains: [{ at: "14:31", minutes: 1 }] },
-          ],
-        });
-      },
-      lines: () => Promise.resolve([METRO_1]),
-      statuses: (lines) =>
-        Promise.resolve(
-          lines.map((line) => ({
-            detail: {
-              en: "Traffic normal on the whole line",
-              fr: "Trafic normal sur l’ensemble de la ligne",
-            },
-            key: line.key,
-            level: "ok" as const,
-          }))
-        ),
-      stops: () =>
-        Promise.resolve([{ id: "stop_area:IDFM:71264", name: "Châtelet" }]),
-    };
-
-    const { app } = setUp({ prim });
+    const { app } = setUp({ prim: livePrim(asked) });
 
     const ask = (query: string) =>
       app.request(`/api/transport/departures?${query}`);
@@ -691,13 +742,26 @@ describe("transport", () => {
     expect(await statusOf(ask("line=metro:1&stop=stop_area:IDFM:71264"))).toBe(
       200
     );
+    expect(
+      await statusOf(
+        ask("line=metro:1&stop=stop_area:IDFM:71264&direction=outbound")
+      )
+    ).toBe(200);
     expect(await statusOf(ask("line=metro:1&stop=stop_area:IDFM:99999"))).toBe(
       400
     );
     expect(await statusOf(ask("line=metro:2&stop=stop_area:IDFM:71264"))).toBe(
       400
     );
-    expect(asked).toEqual(["metro:1 stop_area:IDFM:71264"]);
+    expect(
+      await statusOf(
+        ask("line=metro:1&stop=stop_area:IDFM:71264&direction=sideways")
+      )
+    ).toBe(400);
+    expect(asked).toEqual([
+      `departures ${METRO_1.prim} stop_area:IDFM:71264 any`,
+      `departures ${METRO_1.prim} stop_area:IDFM:71264 outbound`,
+    ]);
 
     const lines = await jsonOf(app.request("/api/transport/lines"));
 
@@ -727,5 +791,97 @@ describe("transport", () => {
         level: "ok",
       },
     ]);
+  });
+
+  it("gives a line's directions, and one way's stops in order", async () => {
+    const { app } = setUp({ prim: livePrim() });
+
+    expect(
+      await jsonOf(app.request("/api/transport/directions?line=metro:1"))
+    ).toEqual([
+      { id: "outbound", towards: "La Défense" },
+      { id: "inbound", towards: "Château de Vincennes" },
+    ]);
+    expect(
+      await jsonOf(
+        app.request("/api/transport/stops?line=metro:1&direction=outbound")
+      )
+    ).toEqual([CHATELET, BECON]);
+    expect(
+      await jsonOf(app.request("/api/transport/stops?line=metro:1"))
+    ).toEqual([BECON, CHATELET]);
+    expect(
+      await statusOf(
+        app.request("/api/transport/stops?line=metro:1&direction=up")
+      )
+    ).toBe(400);
+  });
+
+  it("finds trains from one stop to another only between two stops of the line", async () => {
+    const asked: string[] = [];
+    const { app } = setUp({ prim: livePrim(asked) });
+
+    const trips = (from: string, to: string) =>
+      app.request(`/api/transport/trips?line=metro:1&from=${from}&to=${to}`);
+
+    expect(await jsonOf(trips(CHATELET.id, BECON.id))).toEqual({
+      trips: [
+        {
+          arrives: "19:34",
+          at: "19:28",
+          live: true,
+          minutes: 3,
+          towards: "Cergy le Haut",
+        },
+      ],
+    });
+    expect(await statusOf(trips(CHATELET.id, CHATELET.id))).toBe(400);
+    expect(await statusOf(trips(CHATELET.id, "stop_area:IDFM:1"))).toBe(400);
+    expect(asked).toEqual([`trips ${METRO_1.prim} ${CHATELET.id} ${BECON.id}`]);
+  });
+
+  it("serves a bus line by PRIM's id once PRIM says it is a bus, and finds buses by number", async () => {
+    const asked: string[] = [];
+    const { app } = setUp({ prim: livePrim(asked) });
+
+    expect(await jsonOf(app.request("/api/transport/buses?q=72"))).toEqual([
+      BUS_72,
+    ]);
+    expect(await statusOf(app.request("/api/transport/buses?q=72;drop"))).toBe(
+      400
+    );
+    expect(
+      await statusOf(
+        app.request(
+          `/api/transport/departures?line=${BUS_72.id}&stop=${CHATELET.id}&direction=inbound`
+        )
+      )
+    ).toBe(200);
+    expect(
+      await statusOf(
+        app.request(
+          `/api/transport/departures?line=line:IDFM:C99999&stop=${CHATELET.id}`
+        )
+      )
+    ).toBe(400);
+    expect(asked).toEqual([`departures ${BUS_72.id} ${CHATELET.id} inbound`]);
+  });
+
+  it("looks for buses near a point in Île-de-France only, rounded to about a hundred metres", async () => {
+    const asked: string[] = [];
+    const { app } = setUp({ prim: livePrim(asked) });
+
+    expect(
+      await statusOf(
+        app.request("/api/transport/near?lat=48.904712&lon=2.268931")
+      )
+    ).toBe(200);
+    expect(
+      await statusOf(app.request("/api/transport/near?lat=51.5&lon=-0.12"))
+    ).toBe(400);
+    expect(
+      await statusOf(app.request("/api/transport/near?lat=abc&lon=2.3"))
+    ).toBe(400);
+    expect(asked).toEqual(["near 48.905,2.269"]);
   });
 });

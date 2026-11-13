@@ -49,7 +49,7 @@ const app = createApp({
   prim: env.primApiKey ? createPrim({ apiKey: env.primApiKey }) : null,
   region: () => fetchRegion(),
   storage: createStorage(env.s3),
-  velib: () => fetchVelib(),
+  velib: (near) => fetchVelib(near),
   weather: () => fetchWeather(),
   whoIs: askAccountService(env.authUrl),
 });

@@ -85,11 +85,62 @@ export interface Stop {
   /** PRIM's stop area id. */
   id: string;
   name: string;
+  /** Where it is, to find the one nearest the rider. */
+  lat: number;
+  lon: number;
+}
+
+/** Which way a line runs, as PRIM files its routes. */
+export type DirectionId = "inbound" | "outbound";
+
+export interface Direction {
+  id: DirectionId;
+  /** The termini that way: "Mairie d'Ivry / Villejuif - Louis Aragon". */
+  towards: string;
 }
 
 export interface Departures {
   /** Where trains from the stop go, the soonest first, each with its next trains. */
   directions: { towards: string; trains: { minutes: number; at: string }[] }[];
+}
+
+/** A train from one stop that calls at another, with no change. */
+export interface Trip {
+  /** "19:28", when it leaves, and in how many minutes. */
+  at: string;
+  minutes: number;
+  /** "19:34", when it gets there. */
+  arrives: string;
+  towards: string;
+  /** False when the time is the timetable's, not live. */
+  live: boolean;
+}
+
+export interface Trips {
+  trips: Trip[];
+}
+
+/** A bus line as a search finds it: codes repeat between networks. */
+export interface BusLine {
+  /** PRIM's line id, "line:IDFM:C01107". */
+  id: string;
+  code: string;
+  network: string;
+  colour: string;
+  ink: string;
+}
+
+/** A stop near the rider, with what leaves from it soonest, line by line. */
+export interface NearbyStop {
+  id: string;
+  name: string;
+  /** In metres. */
+  distance: number;
+  departures: {
+    line: { code: string; colour: string; ink: string };
+    towards: string;
+    minutes: number[];
+  }[];
 }
 
 export interface VelibStation {

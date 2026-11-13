@@ -10,8 +10,12 @@ import { isCuisine } from "../src/data/cuisines";
 import { LINES } from "../src/data/lines";
 import type {
   ApiError,
+  BusLine,
   Departures,
+  Direction,
+  DirectionId,
   LinesReport,
+  NearbyStop,
   Me,
   Stop,
   PickedPlace,
@@ -19,6 +23,8 @@ import type {
   Place,
   TrafficReport,
   Ratings,
+  Trip,
+  Trips,
   VelibReport,
   WeatherReport,
 } from "../src/lib/api";
@@ -40,7 +46,8 @@ interface AppOptions {
   weather: () => Promise<WeatherReport>;
   /** The weather and air at every town on the Île-de-France map. */
   region: () => Promise<RegionReport>;
-  velib: () => Promise<VelibReport>;
+  /** Around the centre, or the stations nearest a point. */
+  velib: (near?: { lat: number; lon: number }) => Promise<VelibReport>;
   /** Null without a PRIM key: the transport routes then say so. */
   prim: Prim | null;
   /** Null without a Google Maps key: adding places then says so. */
@@ -100,6 +107,43 @@ const placeRequest = z.object({
 
 /** The map files there are. */
 const MAP_FILES = ["paris.pmtiles", "idf.pmtiles"] as const;
+
+const DAY = 24 * 60 * 60_000;
+
+/** A bus line as PRIM names it, "line:IDFM:C01107". */
+const BUS_LINE = /^line:IDFM:C\d{5}$/u;
+
+/** What a rider types to find a bus: its number, "72", "N01", "TVM". */
+const BUS_QUERY = /^[0-9A-Z]{1,6}$/u;
+
+/** Île-de-France, roughly: a point outside it is not looked up. */
+const REGION = { east: 3.6, north: 49.3, south: 48.1, west: 1.4 };
+
+/**
+ * The rider's position from `?lat=&lon=`, rounded to about a hundred
+ * metres: enough to find the stops near them, and all that leaves this
+ * server. Null when it is not a point in Île-de-France.
+ */
+export const pointOf = (lat: string | undefined, lon: string | undefined) => {
+  const y = Number(lat);
+  const x = Number(lon);
+
+  if (
+    !(lat && lon && Number.isFinite(y) && Number.isFinite(x)) ||
+    y < REGION.south ||
+    y > REGION.north ||
+    x < REGION.west ||
+    x > REGION.east
+  ) {
+    return null;
+  }
+
+  return { lat: Math.round(y * 1000) / 1000, lon: Math.round(x * 1000) / 1000 };
+};
+
+/** "inbound" or "outbound" from a `?direction=`; undefined when it is neither. */
+const wayOf = (value: string | undefined): DirectionId | undefined =>
+  value === "inbound" || value === "outbound" ? value : undefined;
 
 /** How long a photo's notes may run. */
 const NOTES_LENGTH = 500;
@@ -164,8 +208,14 @@ export const createApp = ({
     ttlMs: 30_000,
   });
 
-  const linesCache = createCache<PrimLine[]>({ ttlMs: 24 * 60 * 60_000 });
-  const stopsCache = createCache<Stop[]>({ ttlMs: 24 * 60 * 60_000 });
+  const linesCache = createCache<PrimLine[]>({ ttlMs: DAY });
+  const stopsCache = createCache<Stop[]>({ ttlMs: DAY });
+  const towardsCache = createCache<Stop[]>({ ttlMs: DAY });
+  const directionsCache = createCache<Direction[]>({ ttlMs: DAY });
+  const busCache = createCache<BusLine | null>({ ttlMs: DAY });
+  const busSearchCache = createCache<BusLine[]>({ ttlMs: DAY });
+  const tripsCache = createCache<Trip[]>({ staleMs: 0, ttlMs: 30_000 });
+  const nearCache = createCache<NearbyStop[]>({ staleMs: 0, ttlMs: 30_000 });
 
   app.onError((thrown, c) => {
     console.error(thrown);
@@ -243,8 +293,19 @@ export const createApp = ({
   });
 
   app.get("/api/velib", async (c) => {
+    const asked = c.req.query("lat") ?? c.req.query("lon");
+    const point = pointOf(c.req.query("lat"), c.req.query("lon"));
+
+    if (asked && !point) {
+      return fail(c, 400, "where");
+    }
+
     try {
-      return c.json(await velibCache("central", velib));
+      return c.json(
+        await velibCache(point ? `${point.lat},${point.lon}` : "central", () =>
+          velib(point ?? undefined)
+        )
+      );
     } catch (error) {
       console.error("Vélib'", error);
 
@@ -262,11 +323,53 @@ export const createApp = ({
     return lines.find((line) => line.key === key) ?? null;
   };
 
+  /**
+   * PRIM's id for the line a `?line=` names: a metro, RER, tram or
+   * Transilien line by its key, or a bus line by PRIM's own id, once PRIM
+   * says it is a bus. Null for anything else.
+   */
+  const primIdOf = async (live: Prim, key: string | undefined) => {
+    if (key && BUS_LINE.test(key)) {
+      const bus = await busCache(key, () => live.busLine(key));
+
+      return bus?.id ?? null;
+    }
+
+    const line = await lineAt(live, key);
+
+    return line?.prim ?? null;
+  };
+
+  const stopsOf = (live: Prim, lineId: string) =>
+    stopsCache(lineId, () => live.stops(lineId));
+
   /** Whether a stop is on a line, as PRIM lists the line's stops. */
-  const isOnLine = async (live: Prim, line: PrimLine, stopId: string) => {
-    const stops = await stopsCache(line.key, () => live.stops(line));
+  const isOnLine = async (live: Prim, lineId: string, stopId: string) => {
+    const stops = await stopsOf(live, lineId);
 
     return stops.some((stop) => stop.id === stopId);
+  };
+
+  /**
+   * Runs a PRIM answer: 503 without the key, and when PRIM fails, the
+   * failure logged and a 503 the page can read.
+   */
+  const fromPrim = async (
+    c: Context,
+    what: string,
+    answer: (live: Prim) => Promise<Response>
+  ) => {
+    if (!prim) {
+      return fail(c, 503, "no-prim-key");
+    }
+
+    try {
+      return await answer(prim);
+    } catch (error) {
+      console.error(`PRIM ${what}`, error);
+
+      return upstreamFailed(c, "prim");
+    }
   };
 
   app.get("/api/transport/lines", async (c) => {
@@ -288,70 +391,130 @@ export const createApp = ({
     }
   });
 
-  app.get("/api/transport/stops", async (c) => {
-    if (!prim) {
-      return fail(c, 503, "no-prim-key");
-    }
+  app.get("/api/transport/directions", (c) =>
+    fromPrim(c, "directions", async (live) => {
+      const lineId = await primIdOf(live, c.req.query("line"));
 
-    try {
-      const line = await lineAt(prim, c.req.query("line"));
-
-      if (!line) {
+      if (!lineId) {
         return fail(c, 400, "line");
       }
 
-      return c.json(await stopsCache(line.key, () => prim.stops(line)));
-    } catch (error) {
-      console.error("PRIM stops", error);
+      return c.json(
+        await directionsCache(lineId, () => live.directions(lineId))
+      );
+    })
+  );
 
-      return upstreamFailed(c, "prim");
-    }
-  });
+  /** A line's stops: in the order trains call at them one way, or all of them by name. */
+  app.get("/api/transport/stops", (c) =>
+    fromPrim(c, "stops", async (live) => {
+      const lineId = await primIdOf(live, c.req.query("line"));
+      const asked = c.req.query("direction");
+      const way = wayOf(asked);
 
-  app.get("/api/transport/status", async (c) => {
-    if (!prim) {
-      return fail(c, 503, "no-prim-key");
-    }
+      if (!lineId || (asked && !way)) {
+        return fail(c, 400, "line");
+      }
 
-    try {
-      const report = await trafficCache("all", async () => ({
-        lines: await prim.statuses(await linesOf(prim)),
-        updatedAt: new Date().toISOString(),
-      }));
+      return c.json(
+        way
+          ? await towardsCache(`${lineId}|${way}`, () =>
+              live.stopsTowards(lineId, way)
+            )
+          : await stopsOf(live, lineId)
+      );
+    })
+  );
 
-      return c.json(report);
-    } catch (error) {
-      console.error("PRIM line status", error);
+  app.get("/api/transport/status", (c) =>
+    fromPrim(c, "line status", async (live) =>
+      c.json(
+        await trafficCache("all", async () => ({
+          lines: await live.statuses(await linesOf(live)),
+          updatedAt: new Date().toISOString(),
+        }))
+      )
+    )
+  );
 
-      return upstreamFailed(c, "prim");
-    }
-  });
-
-  app.get("/api/transport/departures", async (c) => {
-    if (!prim) {
-      return fail(c, 503, "no-prim-key");
-    }
-
-    try {
-      const line = await lineAt(prim, c.req.query("line"));
+  app.get("/api/transport/departures", (c) =>
+    fromPrim(c, "departures", async (live) => {
+      const lineId = await primIdOf(live, c.req.query("line"));
       const stopId = c.req.query("stop") ?? "";
+      const asked = c.req.query("direction");
+      const way = wayOf(asked);
 
       // Only a stop on that line, as PRIM lists it: nothing else is asked of PRIM.
-      if (!(line && (await isOnLine(prim, line, stopId)))) {
+      if (
+        !(lineId && (await isOnLine(live, lineId, stopId))) ||
+        (asked && !way)
+      ) {
         return fail(c, 400, "stop");
       }
 
       return c.json(
-        await departuresCache(`${line.key}|${stopId}`, () =>
-          prim.departures(line, stopId)
+        await departuresCache(`${lineId}|${stopId}|${way ?? ""}`, () =>
+          live.departures(lineId, stopId, way)
         )
       );
-    } catch (error) {
-      console.error("PRIM departures", error);
+    })
+  );
 
-      return upstreamFailed(c, "prim");
-    }
-  });
+  /** The next trains from one stop of a line that call at another. */
+  app.get("/api/transport/trips", (c) =>
+    fromPrim(c, "trips", async (live) => {
+      const lineId = await primIdOf(live, c.req.query("line"));
+      const from = c.req.query("from") ?? "";
+      const to = c.req.query("to") ?? "";
+
+      if (
+        !(
+          lineId &&
+          from !== to &&
+          (await isOnLine(live, lineId, from)) &&
+          (await isOnLine(live, lineId, to))
+        )
+      ) {
+        return fail(c, 400, "stop");
+      }
+
+      return c.json({
+        trips: await tripsCache(`${lineId}|${from}|${to}`, () =>
+          live.trips(lineId, from, to)
+        ),
+      } satisfies Trips);
+    })
+  );
+
+  /** Bus lines by their number: "72", "N01". */
+  app.get("/api/transport/buses", (c) =>
+    fromPrim(c, "bus search", async (live) => {
+      const query = (c.req.query("q") ?? "").trim().toUpperCase();
+
+      if (!BUS_QUERY.test(query)) {
+        return fail(c, 400, "search");
+      }
+
+      return c.json(await busSearchCache(query, () => live.searchBuses(query)));
+    })
+  );
+
+  /** The bus stops nearest the rider, with what leaves each soonest. */
+  app.get("/api/transport/near", (c) =>
+    fromPrim(c, "nearby buses", async (live) => {
+      const point = pointOf(c.req.query("lat"), c.req.query("lon"));
+
+      if (!point) {
+        return fail(c, 400, "where");
+      }
+
+      return c.json(
+        await nearCache(`${point.lat},${point.lon}`, () =>
+          live.busesNear(point.lat, point.lon)
+        )
+      );
+    })
+  );
 
   app.get("/api/places", async (c) => c.json(await places.read()));
 

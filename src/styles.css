@@ -834,6 +834,17 @@ select.field {
   width: 40px;
   border-radius: 12px;
 }
+.badge--tram {
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 15px;
+}
+.badge--bus {
+  min-width: 48px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+}
 .badge--pick {
   width: 44px;
   min-width: 44px;
@@ -883,6 +894,83 @@ select.field {
 .segmented--fit button {
   flex: none;
   text-align: center;
+}
+/* A direction or a bus line to pick: a row of joined-up choices. */
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: var(--line);
+  border-radius: var(--radius-field);
+  background: var(--raised);
+  color: var(--text);
+  font: 700 14px/1.2 var(--body);
+  text-align: left;
+}
+.choice:hover {
+  background: var(--raised-hover);
+}
+.choice[aria-pressed="true"] {
+  background: var(--selected);
+  color: var(--on-selected);
+}
+.choice--bus {
+  padding: 6px 12px 6px 6px;
+  font-weight: 600;
+}
+.locate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+/* Trains from one stop to another: when each leaves, gets there, and where it ends. */
+.trips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.trip__arrives {
+  font-size: 13px;
+  font-weight: 700;
+}
+.trip__towards {
+  font-size: 12.5px;
+}
+/* The bus stops near the rider. */
+.nearby {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.nearby__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nearby__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nearby__towards {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+.nearby__minutes {
+  flex: none;
+  font: 600 15px/1.2 var(--display);
 }
 .stops {
   max-height: 232px;
@@ -1106,6 +1194,10 @@ select.field {
 .pin--empty {
   background: var(--raised);
   color: var(--text);
+}
+.pin--you {
+  background: var(--focus);
+  color: var(--white);
 }
 .pin--place {
   background: var(--danger);

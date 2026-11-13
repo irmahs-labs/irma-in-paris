@@ -1,19 +1,25 @@
 import * as z from "zod/mini";
 
-import { LINES, lineOf, lineOrder } from "../src/data/lines";
+import { LINES, MODES, lineOf, lineOrder } from "../src/data/lines";
 import type { Mode, TransitLine } from "../src/data/lines";
 import type {
+  BusLine,
   Departures,
+  Direction,
+  DirectionId,
   LineLevel,
   LineStatus,
   Localized,
+  NearbyStop,
   Stop,
+  Trip,
 } from "../src/lib/api";
 
 /**
- * Île-de-France Mobilités' PRIM, through its Navitia API: the metro, RER
- * and Transilien lines, each line's stops, the next departures from a stop,
- * and the lines' disruptions. Every request carries the PRIM key in its
+ * Île-de-France Mobilités' PRIM, through its Navitia API: the metro, RER,
+ * tram and Transilien lines, any bus line, each line's directions and
+ * stops, the next departures from a stop, the trains from one stop to
+ * another, the bus stops near a point, and the lines' disruptions. Every request carries the PRIM key in its
  * `apikey` header; the key never leaves this server.
  */
 export const PRIM_NAVITIA =
@@ -28,15 +34,23 @@ export interface PrimLine extends TransitLine {
 const PHYSICAL_MODES: Record<Mode, string> = {
   metro: "physical_mode:Metro",
   rer: "physical_mode:RapidTransit",
+  tram: "physical_mode:Tramway",
   transilien: "physical_mode:LocalTrain",
 };
 
-/** The codes each mode's lines carry, so trams, buses and TER stay out. */
+/** The codes each mode's lines carry, so buses, TER and the like stay out. */
 const CODES: Record<Mode, RegExp> = {
   metro: /^(?:\d{1,2}|3B|7B)$/u,
   rer: /^[A-E]$/u,
+  tram: /^T\d{1,2}[ab]?$/u,
   transilien: /^[F-Z]$/u,
 };
+
+/** "3bis" → "3B", "a" → "A"; a tram's code stays as PRIM writes it, "T3a". */
+const codeOf = (mode: Mode, code: string) =>
+  mode === "tram"
+    ? code.trim()
+    : code.trim().toUpperCase().replace(/BIS$/u, "B");
 
 export const linesAnswer = z.object({
   lines: z.array(
@@ -60,7 +74,7 @@ export const toLines = (
 
   return answer.lines
     .flatMap((line) => {
-      const code = line.code.trim().toUpperCase().replace(/BIS$/u, "B");
+      const code = codeOf(mode, line.code);
 
       if (!CODES[mode].test(code) || seen.has(code)) {
         return [];
@@ -92,15 +106,154 @@ export const toLines = (
     .toSorted(lineOrder);
 };
 
-export const stopAreasAnswer = z.object({
-  stop_areas: z.array(z.object({ id: z.string(), name: z.string() })),
+/** "Château de Vincennes (Vincennes)" → "Château de Vincennes": the town is noise on a sign. */
+export const terminusName = (name: string) => {
+  const trimmed = name.trim();
+
+  if (!trimmed.endsWith(")")) {
+    return trimmed;
+  }
+
+  // The bracket opens at the first "(" since the ")" before the last one.
+  const open = trimmed.indexOf(
+    "(",
+    trimmed.lastIndexOf(")", trimmed.length - 2) + 1
+  );
+
+  return open === -1 ? trimmed : trimmed.slice(0, open).trim();
+};
+
+/** Navitia writes coordinates as strings. */
+const coord = z.object({ lat: z.string(), lon: z.string() });
+
+const stopArea = z.object({ coord, id: z.string(), name: z.string() });
+
+export const stopAreasAnswer = z.object({ stop_areas: z.array(stopArea) });
+
+const toStop = (area: z.infer<typeof stopArea>): Stop => ({
+  id: area.id,
+  lat: Number(area.coord.lat),
+  lon: Number(area.coord.lon),
+  name: area.name,
 });
 
 /** A line's stops, in alphabetical order as a French reader expects it. */
 export const toStops = (answer: z.infer<typeof stopAreasAnswer>): Stop[] =>
   answer.stop_areas
-    .map((area) => ({ id: area.id, name: area.name }))
+    .map(toStop)
     .toSorted((a, b) => a.name.localeCompare(b.name, "fr"));
+
+export const routesAnswer = z.object({
+  routes: z.array(
+    z.object({
+      direction: z.object({ name: z.string() }),
+      direction_type: z.optional(z.string()),
+      id: z.string(),
+      name: z.string(),
+    })
+  ),
+});
+
+type Routes = z.infer<typeof routesAnswer>;
+
+const isWay = (value: string | undefined): value is DirectionId =>
+  value === "inbound" || value === "outbound";
+
+/**
+ * Each way's main routes, by terminus: those named after where they go, so
+ * a short run ("La Courneuve" towards Place d'Italie) does not count as a
+ * terminus of its own. When none is, every route that way counts.
+ */
+const mainRoutes = (answer: Routes, way: DirectionId) => {
+  const routes = answer.routes.filter((route) => route.direction_type === way);
+
+  const main = routes.filter((route) =>
+    route.name.includes(terminusName(route.direction.name))
+  );
+
+  const byTerminus = new Map<string, string[]>();
+
+  for (const route of main.length > 0 ? main : routes) {
+    const terminus = terminusName(route.direction.name);
+
+    byTerminus.set(terminus, [...(byTerminus.get(terminus) ?? []), route.id]);
+  }
+
+  return byTerminus;
+};
+
+/** The line's two ways, each named by its termini: "Mairie d'Ivry / Villejuif - Louis Aragon". */
+export const toDirections = (answer: Routes): Direction[] => {
+  const ways = [
+    ...new Set(answer.routes.map((route) => route.direction_type)),
+  ].filter(isWay);
+
+  return ways.flatMap((way) => {
+    const termini = [...mainRoutes(answer, way).keys()];
+
+    return termini.length > 0
+      ? [{ id: way, towards: termini.join(" / ") }]
+      : [];
+  });
+};
+
+export const vehicleJourneysAnswer = z.object({
+  vehicle_journeys: z.array(
+    z.object({
+      stop_times: z.array(
+        z.object({ stop_point: z.object({ stop_area: stopArea }) })
+      ),
+    })
+  ),
+});
+
+/** Routes asked for one way, at most. */
+const ROUTES_PER_WAY = 8;
+
+/** A route's stops in the order a train calls at them: its longest journey's. */
+export const toCalls = (
+  answer: z.infer<typeof vehicleJourneysAnswer>
+): Stop[] => {
+  const [longest] = answer.vehicle_journeys.toSorted(
+    (a, b) => b.stop_times.length - a.stop_times.length
+  );
+
+  return (longest?.stop_times ?? []).map((time) =>
+    toStop(time.stop_point.stop_area)
+  );
+};
+
+/**
+ * One way's stops in order, from each of its routes, the longest first: a
+ * branch that splits off goes after the stops it shares, one that joins
+ * goes before.
+ */
+export const mergeCalls = (branches: readonly Stop[][]): Stop[] => {
+  const merged: Stop[] = [];
+
+  for (const branch of branches.toSorted((a, b) => b.length - a.length)) {
+    let pending: Stop[] = [];
+
+    for (const stop of branch) {
+      const at = merged.findIndex((known) => known.id === stop.id);
+
+      if (at === -1) {
+        if (!pending.some((known) => known.id === stop.id)) {
+          pending.push(stop);
+        }
+
+        continue;
+      }
+
+      merged.splice(at, 0, ...pending);
+      pending = [];
+    }
+
+    merged.push(...pending);
+  }
+
+  return merged;
+};
 
 export const departuresAnswer = z.object({
   context: z.optional(z.object({ current_datetime: z.optional(z.string()) })),
@@ -112,6 +265,7 @@ export const departuresAnswer = z.object({
       route: z.optional(
         z.object({
           direction: z.optional(z.object({ name: z.optional(z.string()) })),
+          direction_type: z.optional(z.string()),
         })
       ),
       stop_date_time: z.object({ departure_date_time: z.string() }),
@@ -162,22 +316,8 @@ export const parisStamp = (date: Date) => {
   return `${part("year")}${part("month")}${part("day")}T${part("hour")}${part("minute")}${part("second")}`;
 };
 
-/** "Château de Vincennes (Vincennes)" → "Château de Vincennes": the town is noise on a sign. */
-export const terminusName = (name: string) => {
-  const trimmed = name.trim();
-
-  if (!trimmed.endsWith(")")) {
-    return trimmed;
-  }
-
-  // The bracket opens at the first "(" since the ")" before the last one.
-  const open = trimmed.indexOf(
-    "(",
-    trimmed.lastIndexOf(")", trimmed.length - 2) + 1
-  );
-
-  return open === -1 ? trimmed : trimmed.slice(0, open).trim();
-};
+/** "20261112T192800" → "19:28" */
+const clockOf = (time: string) => `${time.slice(9, 11)}:${time.slice(11, 13)}`;
 
 /** Trains shown for each direction, and directions for a stop. */
 const TRAINS = 3;
@@ -191,12 +331,17 @@ const DIRECTIONS = 6;
  */
 export const toDepartures = (
   parsed: z.infer<typeof departuresAnswer>,
-  now: Date = new Date()
+  now: Date = new Date(),
+  way?: DirectionId
 ): Departures => {
   const start = minutesOf(parsed.context?.current_datetime ?? parisStamp(now));
   const byTerminus = new Map<string, { minutes: number; at: string }[]>();
 
   for (const departure of parsed.departures) {
+    if (way && departure.route?.direction_type !== way) {
+      continue;
+    }
+
     const towards = terminusName(
       departure.display_informations?.direction ??
         departure.route?.direction?.name ??
@@ -473,12 +618,244 @@ export const toStatuses = (
   });
 };
 
+export const journeysAnswer = z.object({
+  context: z.optional(z.object({ current_datetime: z.optional(z.string()) })),
+  journeys: z.optional(
+    z.array(
+      z.object({
+        sections: z.array(
+          z.object({
+            arrival_date_time: z.optional(z.string()),
+            data_freshness: z.optional(z.string()),
+            departure_date_time: z.optional(z.string()),
+            display_informations: z.optional(
+              z.object({ direction: z.optional(z.string()) })
+            ),
+            type: z.string(),
+          })
+        ),
+      })
+    )
+  ),
+});
+
+/** Trips shown from one stop to another. */
+const TRIPS = 4;
+
+/**
+ * The next trains from one stop that call at another, with no change: the
+ * journeys PRIM finds on the one line, each a single train.
+ */
+export const toTrips = (
+  parsed: z.infer<typeof journeysAnswer>,
+  now: Date = new Date()
+): Trip[] => {
+  const start = minutesOf(parsed.context?.current_datetime ?? parisStamp(now));
+  const seen = new Set<string>();
+
+  return (parsed.journeys ?? [])
+    .flatMap((journey) => {
+      const rides = journey.sections.filter(
+        (section) => section.type === "public_transport"
+      );
+
+      const [ride] = rides;
+      const leaves = ride?.departure_date_time;
+      const arrives = ride?.arrival_date_time;
+
+      if (rides.length !== 1 || !ride || !leaves || !arrives) {
+        return [];
+      }
+
+      const towards = terminusName(ride.display_informations?.direction ?? "");
+      // One train can come back twice, as timetabled and as running late.
+      const key = `${clockOf(leaves)}|${towards}`;
+
+      if (seen.has(key)) {
+        return [];
+      }
+
+      seen.add(key);
+
+      return [
+        {
+          arrives: clockOf(arrives),
+          at: clockOf(leaves),
+          live: ride.data_freshness === "realtime",
+          minutes: Math.max(0, Math.floor(minutesOf(leaves) - start)),
+          towards,
+        },
+      ];
+    })
+    .toSorted((a, b) => a.minutes - b.minutes)
+    .slice(0, TRIPS);
+};
+
+const BUS = "physical_mode:Bus";
+
+const lineObject = z.object({
+  code: z.optional(z.string()),
+  color: z.optional(z.string()),
+  id: z.string(),
+  network: z.optional(z.object({ name: z.optional(z.string()) })),
+  physical_modes: z.optional(z.array(z.object({ id: z.string() }))),
+  text_color: z.optional(z.string()),
+});
+
+const hexOr = (value: string | undefined, fallback: string) =>
+  value && HEX.test(value) ? `#${value.toLowerCase()}` : fallback;
+
+/** A line PRIM lists as a bus, as the bus screen shows it; null for anything else. */
+export const toBusLine = (line: z.infer<typeof lineObject>): BusLine | null =>
+  (line.physical_modes ?? []).some((mode) => mode.id === BUS) && line.code
+    ? {
+        code: line.code,
+        colour: hexOr(line.color, "#d4dd9c"),
+        id: line.id,
+        ink: hexOr(line.text_color, "#000000"),
+        network: line.network?.name ?? "",
+      }
+    : null;
+
+export const lineSearchAnswer = z.object({
+  pt_objects: z.optional(
+    z.array(
+      z.object({ embedded_type: z.string(), line: z.optional(lineObject) })
+    )
+  ),
+});
+
+/** The bus lines a search finds, the one whose code is exactly what was typed first. */
+export const toBusLines = (
+  query: string,
+  answer: z.infer<typeof lineSearchAnswer>
+): BusLine[] => {
+  const typed = query.trim().toUpperCase();
+
+  return (answer.pt_objects ?? [])
+    .flatMap((object) => {
+      const bus = object.line ? toBusLine(object.line) : null;
+
+      return bus ? [bus] : [];
+    })
+    .toSorted(
+      (a, b) =>
+        Number(b.code.toUpperCase() === typed) -
+          Number(a.code.toUpperCase() === typed) ||
+        a.code.length - b.code.length
+    );
+};
+
+export const lineAnswer = z.object({ lines: z.array(lineObject) });
+
+export const nearbyAnswer = z.object({
+  places_nearby: z.optional(
+    z.array(
+      z.object({
+        distance: z.optional(z.string()),
+        embedded_type: z.string(),
+        id: z.string(),
+        name: z.string(),
+      })
+    )
+  ),
+});
+
+/** Bus stops looked at around the rider, and lines and times shown at each. */
+const NEARBY_STOPS = 3;
+const NEARBY_LINES = 8;
+const NEARBY_TIMES = 3;
+
+/** Buses further off than this are left out: a night bus at 2 a.m. helps no one at 7 p.m. */
+const NEARBY_MINUTES = 90;
+
+export const busDeparturesAnswer = z.object({
+  context: z.optional(z.object({ current_datetime: z.optional(z.string()) })),
+  departures: z.array(
+    z.object({
+      display_informations: z.optional(
+        z.object({
+          code: z.optional(z.string()),
+          color: z.optional(z.string()),
+          direction: z.optional(z.string()),
+          text_color: z.optional(z.string()),
+        })
+      ),
+      stop_date_time: z.object({ departure_date_time: z.string() }),
+    })
+  ),
+});
+
+/** What leaves a stop soonest, by line and where it goes. */
+export const toNearbyDepartures = (
+  parsed: z.infer<typeof busDeparturesAnswer>,
+  now: Date = new Date()
+): NearbyStop["departures"] => {
+  const start = minutesOf(parsed.context?.current_datetime ?? parisStamp(now));
+  const byLine = new Map<string, NearbyStop["departures"][number]>();
+
+  for (const departure of parsed.departures) {
+    const info = departure.display_informations;
+    const code = info?.code;
+    const towards = terminusName(info?.direction ?? "");
+
+    const minutes = Math.floor(
+      minutesOf(departure.stop_date_time.departure_date_time) - start
+    );
+
+    if (
+      !(code && towards && Number.isFinite(minutes)) ||
+      minutes > NEARBY_MINUTES
+    ) {
+      continue;
+    }
+
+    const key = `${code}|${towards}`;
+
+    const entry = byLine.get(key) ?? {
+      line: {
+        code,
+        colour: hexOr(info.color, "#d4dd9c"),
+        ink: hexOr(info.text_color, "#000000"),
+      },
+      minutes: [],
+      towards,
+    };
+
+    if (entry.minutes.length < NEARBY_TIMES) {
+      entry.minutes.push(Math.max(0, minutes));
+    }
+
+    byLine.set(key, entry);
+  }
+
+  return [...byLine.values()]
+    .toSorted((a, b) => (a.minutes[0] ?? 0) - (b.minutes[0] ?? 0))
+    .slice(0, NEARBY_LINES);
+};
+
 export interface Prim {
   lines: () => Promise<PrimLine[]>;
-  stops: (line: PrimLine) => Promise<Stop[]>;
-  departures: (line: PrimLine, stopId: string) => Promise<Departures>;
+  /** Every stop of a line, by PRIM's line id, in alphabetical order. */
+  stops: (lineId: string) => Promise<Stop[]>;
+  directions: (lineId: string) => Promise<Direction[]>;
+  /** One way's stops, in the order a train calls at them. */
+  stopsTowards: (lineId: string, way: DirectionId) => Promise<Stop[]>;
+  /** The next departures from a stop, only those going one way when it is given. */
+  departures: (
+    lineId: string,
+    stopId: string,
+    way?: DirectionId
+  ) => Promise<Departures>;
+  /** The next trains from one stop of a line that call at another. */
+  trips: (lineId: string, from: string, to: string) => Promise<Trip[]>;
   /** The status of every line given, from one request per mode. */
   statuses: (lines: readonly PrimLine[]) => Promise<LineStatus[]>;
+  searchBuses: (query: string) => Promise<BusLine[]>;
+  /** The bus line with that id; null when it is not a bus. */
+  busLine: (lineId: string) => Promise<BusLine | null>;
+  /** The bus stops nearest a point, each with what leaves it soonest. */
+  busesNear: (lat: number, lon: number) => Promise<NearbyStop[]>;
 }
 
 const physical = (mode: Mode) => encodeURIComponent(PHYSICAL_MODES[mode]);
@@ -507,17 +884,63 @@ export const createPrim = ({
     return schema.parse(await response.json());
   };
 
+  const id = encodeURIComponent;
+
+  const routesOf = (lineId: string) =>
+    get(`lines/${id(lineId)}/routes?depth=1&count=200`, routesAnswer);
+
   return {
-    departures: async (line, stopId) =>
+    busLine: async (lineId) => {
+      const { lines } = await get(`lines/${id(lineId)}?depth=1`, lineAnswer);
+      const [line] = lines;
+
+      return line ? toBusLine(line) : null;
+    },
+    busesNear: async (lat, lon) => {
+      const query = new URLSearchParams({
+        count: String(NEARBY_STOPS),
+        depth: "0",
+        distance: "500",
+        filter: `physical_mode.id=${BUS}`,
+        "type[]": "stop_area",
+      });
+
+      const nearby = await get(
+        `coord/${lon};${lat}/places_nearby?${query}`,
+        nearbyAnswer
+      );
+
+      const stops = (nearby.places_nearby ?? []).filter(
+        (place) => place.embedded_type === "stop_area"
+      );
+
+      return Promise.all(
+        stops.map(async (stop) => ({
+          departures: toNearbyDepartures(
+            await get(
+              `stop_areas/${id(stop.id)}/physical_modes/${id(BUS)}/departures?count=40&data_freshness=realtime&depth=1`,
+              busDeparturesAnswer
+            )
+          ),
+          distance: Math.round(Number(stop.distance ?? 0)),
+          id: stop.id,
+          name: terminusName(stop.name),
+        }))
+      );
+    },
+    departures: async (lineId, stopId, way) =>
       toDepartures(
         await get(
-          `stop_areas/${encodeURIComponent(stopId)}/lines/${encodeURIComponent(line.prim)}/departures?count=30&data_freshness=realtime`,
+          `stop_areas/${id(stopId)}/lines/${id(lineId)}/departures?count=40&data_freshness=realtime`,
           departuresAnswer
-        )
+        ),
+        new Date(),
+        way
       ),
+    directions: async (lineId) => toDirections(await routesOf(lineId)),
     lines: async () => {
       const modes = await Promise.all(
-        (["metro", "rer", "transilien"] as const).map(async (mode) =>
+        MODES.map(async (mode) =>
           toLines(
             mode,
             await get(
@@ -529,6 +952,19 @@ export const createPrim = ({
       );
 
       return modes.flat();
+    },
+    searchBuses: async (query) => {
+      const params = new URLSearchParams({
+        count: "30",
+        depth: "1",
+        q: query,
+        "type[]": "line",
+      });
+
+      return toBusLines(
+        query,
+        await get(`pt_objects?${params}`, lineSearchAnswer)
+      );
     },
     statuses: async (lines) => {
       const modes = [...new Set(lines.map((line) => line.mode))];
@@ -547,12 +983,43 @@ export const createPrim = ({
 
       return answers.flat();
     },
-    stops: async (line) =>
+    stops: async (lineId) =>
       toStops(
-        await get(
-          `lines/${encodeURIComponent(line.prim)}/stop_areas?count=500`,
-          stopAreasAnswer
-        )
+        await get(`lines/${id(lineId)}/stop_areas?count=500`, stopAreasAnswer)
       ),
+    stopsTowards: async (lineId, way) => {
+      const routes = [...mainRoutes(await routesOf(lineId), way).values()]
+        .flat()
+        .slice(0, ROUTES_PER_WAY);
+
+      const branches = await Promise.all(
+        routes.map(async (route) =>
+          toCalls(
+            await get(
+              `routes/${id(route)}/vehicle_journeys?count=3&depth=2&disable_geojson=true`,
+              vehicleJourneysAnswer
+            )
+          )
+        )
+      );
+
+      return mergeCalls(branches);
+    },
+    trips: async (lineId, from, to) => {
+      const query = new URLSearchParams({
+        "allowed_id[]": lineId,
+        count: String(TRIPS),
+        data_freshness: "realtime",
+        depth: "0",
+        direct_path: "none",
+        disable_geojson: "true",
+        from,
+        max_nb_transfers: "0",
+        min_nb_journeys: String(TRIPS),
+        to,
+      });
+
+      return toTrips(await get(`journeys?${query}`, journeysAnswer));
+    },
   };
 };

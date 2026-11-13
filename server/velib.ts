@@ -12,6 +12,10 @@ import { CENTRAL_PARIS, isInside } from "../src/lib/map";
 const RECORDS =
   "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/velib-disponibilite-en-temps-reel/exports/json";
 
+/** Only the fields the screen shows. */
+const FIELDS =
+  "stationcode,name,is_installed,is_renting,numdocksavailable,mechanical,ebike,coordonnees_geo";
+
 /** The portal's "yes" and "no", in French. */
 const YES = "OUI";
 
@@ -75,46 +79,62 @@ export const spreadOut = (
   return picked;
 };
 
-/** The open stations, as the transport screen shows them, one per cell of the map. */
+/** The open stations, as the Vélib' screen shows them. */
+const openStations = (stations: Stations): VelibStation[] =>
+  stations.flatMap((station) =>
+    station.is_installed === YES && station.is_renting === YES
+      ? [
+          {
+            docks: station.numdocksavailable,
+            ebike: station.ebike,
+            id: station.stationcode,
+            lat: station.coordonnees_geo.lat,
+            lon: station.coordonnees_geo.lon,
+            mechanical: station.mechanical,
+            name: station.name,
+          },
+        ]
+      : []
+  );
+
+/** The open stations around the centre, one per cell of the map. */
 export const toVelibReport = (
   stations: Stations,
   now: Date = new Date()
 ): VelibReport => ({
-  stations: spreadOut(
-    stations.flatMap((station) =>
-      station.is_installed === YES && station.is_renting === YES
-        ? [
-            {
-              docks: station.numdocksavailable,
-              ebike: station.ebike,
-              id: station.stationcode,
-              lat: station.coordonnees_geo.lat,
-              lon: station.coordonnees_geo.lon,
-              mechanical: station.mechanical,
-              name: station.name,
-            },
-          ]
-        : []
-    )
-  ),
+  stations: spreadOut(openStations(stations)),
   updatedAt: now.toISOString(),
 });
+
+/** How far from the rider stations are looked for, and how many are shown. */
+const NEAR_METRES = 1000;
+const NEAR_STATIONS = 15;
+
+/** The portal's query: the stations nearest a point, the nearest first. */
+export const nearUrl = (lat: number, lon: number) => {
+  const point = `geom'POINT(${lon} ${lat})'`;
+
+  const query = new URLSearchParams({
+    limit: String(NEAR_STATIONS),
+    order_by: `distance(coordonnees_geo, ${point})`,
+    select: FIELDS,
+    where: `within_distance(coordonnees_geo, ${point}, ${NEAR_METRES}m)`,
+  });
+
+  return `${RECORDS}?${query}`;
+};
 
 /** The portal's query: the stations inside the box, only the fields shown. */
 export const recordsUrl = (box: Box = CENTRAL_PARIS) => {
   const query = new URLSearchParams({
-    select:
-      "stationcode,name,is_installed,is_renting,numdocksavailable,mechanical,ebike,coordonnees_geo",
+    select: FIELDS,
     where: `in_bbox(coordonnees_geo, ${box.south}, ${box.west}, ${box.north}, ${box.east})`,
   });
 
   return `${RECORDS}?${query}`;
 };
 
-export const fetchVelib = async (
-  fetcher: typeof fetch = fetch
-): Promise<VelibReport> => {
-  const url = recordsUrl();
+const getStations = async (url: string, fetcher: typeof fetch) => {
   const response = await fetcher(url, { signal: AbortSignal.timeout(8000) });
 
   if (!response.ok) {
@@ -127,5 +147,19 @@ export const fetchVelib = async (
     );
   }
 
-  return toVelibReport(stationsAnswer.parse(await response.json()));
+  return stationsAnswer.parse(await response.json());
 };
+
+/** Around the centre, or, given a point, the stations nearest it, the nearest first. */
+export const fetchVelib = async (
+  near?: { lat: number; lon: number },
+  fetcher: typeof fetch = fetch
+): Promise<VelibReport> =>
+  near
+    ? {
+        stations: openStations(
+          await getStations(nearUrl(near.lat, near.lon), fetcher)
+        ),
+        updatedAt: new Date().toISOString(),
+      }
+    : toVelibReport(await getStations(recordsUrl(), fetcher));
