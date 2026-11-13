@@ -22,6 +22,7 @@ import type {
   RegionReport,
   Place,
   TrafficReport,
+  Ratings,
   Trip,
   Trips,
   VelibReport,
@@ -58,6 +59,8 @@ interface AppOptions {
     read: () => Promise<Place[]>;
     /** Null when that Google place is already on the map. */
     add: (place: NewPlace) => Promise<Place | null>;
+    /** False when there is no such place. */
+    rate: (id: string, ratings: Ratings) => Promise<boolean>;
     /** The ids of the photos that went with it; null when there was no such place. */
     remove: (id: string) => Promise<string[] | null>;
     addPhoto: (photo: NewPhoto) => Promise<boolean>;
@@ -71,12 +74,6 @@ interface Variables {
   adminId: string;
 }
 
-const trimmed = (max: number) =>
-  z.pipe(
-    z.string(),
-    z.transform((value) => value.trim().replaceAll(/\s+/gu, " ").slice(0, max))
-  );
-
 /** Google's place ids and the page's session tokens, as far as the server lets them through. */
 const GOOGLE_ID = /^[\w-]{10,300}$/u;
 const SESSION = /^[0-9a-f-]{36}$/u;
@@ -84,18 +81,33 @@ const SESSION = /^[0-9a-f-]{36}$/u;
 /** Plenty for typing a name; too few to run up a bill. */
 const SEARCHES_PER_MINUTE = 60;
 
+/** Out of five, or null when not rated. */
+const stars = z.nullable(z.int().check(z.minimum(1), z.maximum(5)));
+
+const ratingsRequest = z.object({
+  food: stars,
+  service: stars,
+  toilet: stars,
+  value: stars,
+});
+
+const NO_RATINGS: Ratings = {
+  food: null,
+  service: null,
+  toilet: null,
+  value: null,
+};
+
 const placeRequest = z.object({
   cuisine: z.string(),
-  dish: z.optional(trimmed(120)),
   placeId: z.string().check(z.regex(GOOGLE_ID)),
+  ratings: z.optional(ratingsRequest),
   session: z.optional(z.string().check(z.regex(SESSION))),
-  visitedOn: z.optional(z.string()),
 });
 
 /** The map files there are. */
 const MAP_FILES = ["paris.pmtiles", "idf.pmtiles"] as const;
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const DAY = 24 * 60 * 60_000;
 
 /** A bus line as PRIM names it, "line:IDFM:C01107". */
@@ -132,6 +144,9 @@ export const pointOf = (lat: string | undefined, lon: string | undefined) => {
 /** "inbound" or "outbound" from a `?direction=`; undefined when it is neither. */
 const wayOf = (value: string | undefined): DirectionId | undefined =>
   value === "inbound" || value === "outbound" ? value : undefined;
+
+/** How long a photo's notes may run. */
+const NOTES_LENGTH = 500;
 
 const PLACE_ID = /^\d{1,18}$/u;
 
@@ -606,20 +621,10 @@ export const createApp = ({
       return fail(c, 400, "place");
     }
 
-    const {
-      placeId,
-      session,
-      cuisine,
-      dish = "",
-      visitedOn = "",
-    } = parsed.data;
+    const { placeId, session, cuisine, ratings = NO_RATINGS } = parsed.data;
 
     if (!isCuisine(cuisine)) {
       return fail(c, 400, "cuisine");
-    }
-
-    if (visitedOn && !DATE.test(visitedOn)) {
-      return fail(c, 400, "date");
     }
 
     let found: GooglePlace | null;
@@ -643,13 +648,12 @@ export const createApp = ({
       address: found.address,
       area: found.area,
       cuisine,
-      dish,
       googlePlaceId: found.placeId,
       lat: found.lat,
       lon: found.lon,
       mapsUrl: found.mapsUrl,
       name: found.name,
-      visitedOn: visitedOn || null,
+      ratings,
     });
 
     if (!place) {
@@ -657,6 +661,24 @@ export const createApp = ({
     }
 
     return c.json(place, 201);
+  });
+
+  app.put("/api/places/:id/ratings", adminOnly, async (c) => {
+    const id = c.req.param("id") ?? "";
+
+    const parsed = ratingsRequest.safeParse(
+      await c.req.json().catch(() => null)
+    );
+
+    if (!parsed.success) {
+      return fail(c, 400, "ratings");
+    }
+
+    if (!(PLACE_ID.test(id) && (await places.rate(id, parsed.data)))) {
+      return fail(c, 404, "place");
+    }
+
+    return c.json(parsed.data);
   });
 
   app.delete("/api/places/:id", adminOnly, async (c) => {
@@ -691,10 +713,10 @@ export const createApp = ({
       const large = form?.get("large");
       const thumb = form?.get("thumb");
 
-      const caption = String(form?.get("caption") ?? "")
+      const notes = String(form?.get("notes") ?? "")
         .trim()
-        .replaceAll(/\s+/gu, " ")
-        .slice(0, 120);
+        .replaceAll(/[^\S\n]+/gu, " ")
+        .slice(0, NOTES_LENGTH);
 
       if (
         !(
@@ -735,9 +757,9 @@ export const createApp = ({
 
       try {
         added = await places.addPhoto({
-          caption,
           height: size.height,
           id,
+          notes,
           placeId,
           uploadedBy: c.get("adminId"),
           width: size.width,
@@ -753,10 +775,7 @@ export const createApp = ({
         return fail(c, 404, "place");
       }
 
-      return c.json(
-        { caption, height: size.height, id, width: size.width },
-        201
-      );
+      return c.json({ height: size.height, id, notes, width: size.width }, 201);
     }
   );
 

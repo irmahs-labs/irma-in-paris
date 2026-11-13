@@ -7,6 +7,7 @@ import { env } from "./env";
 import { createGooglePlaces } from "./google-places";
 import {
   addPhoto,
+  rate,
   addPlace,
   photoExists,
   readPlaces,
@@ -40,6 +41,7 @@ const app = createApp({
     add: (place) => addPlace(pool, place),
     addPhoto: (photo) => addPhoto(pool, photo),
     photoExists: (id) => photoExists(pool, id),
+    rate: (id, ratings) => rate(pool, id, ratings),
     read: () => readPlaces(pool),
     remove: (id) => removePlace(pool, id),
     removePhoto: (id) => removePhoto(pool, id),

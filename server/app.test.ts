@@ -4,7 +4,7 @@ import nodePath from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { Place } from "../src/lib/api";
+import type { Place, Ratings } from "../src/lib/api";
 import { createApp } from "./app";
 import { fakeJpeg } from "./fixtures/jpeg";
 import { GoogleKeyRefusedError } from "./google-places";
@@ -115,9 +115,9 @@ const setUp = ({
         const place = rows.find((row) => row.id === photo.placeId);
 
         place?.photos.push({
-          caption: photo.caption,
           height: photo.height,
           id: photo.id,
+          notes: photo.notes,
           width: photo.width,
         });
 
@@ -127,6 +127,15 @@ const setUp = ({
         Promise.resolve(
           rows.some((row) => row.photos.some((photo) => photo.id === id))
         ),
+      rate: (id, ratings) => {
+        const place = rows.find((row) => row.id === id);
+
+        if (place) {
+          place.ratings = ratings;
+        }
+
+        return Promise.resolve(Boolean(place));
+      },
       read: () => Promise.resolve(rows),
       remove: (id) => {
         const at = rows.findIndex((row) => row.id === id);
@@ -176,13 +185,19 @@ const jsonOf = async (request: Response | Promise<Response>) => {
 
 const asAdmin = { cookie: "session=admin", origin: ORIGIN };
 
-const post = (
-  body: Record<string, string>,
-  headers: Record<string, string> = asAdmin
-) => ({
+/** What a test sends as JSON: the form's fields, ratings included. */
+type Body = Record<string, string | Ratings>;
+
+const post = (body: Body, headers: Record<string, string> = asAdmin) => ({
   body: JSON.stringify(body),
   headers: { "content-type": "application/json", ...headers },
   method: "POST",
+});
+
+const put = (body: Ratings, headers: Record<string, string> = asAdmin) => ({
+  body: JSON.stringify(body),
+  headers: { "content-type": "application/json", ...headers },
+  method: "PUT",
 });
 
 const photoForm = (
@@ -193,7 +208,7 @@ const photoForm = (
 
   form.set("large", new Blob([large], { type: "image/jpeg" }), "large.jpg");
   form.set("thumb", new Blob([thumb], { type: "image/jpeg" }), "thumb.jpg");
-  form.set("caption", "  Lok  lak ");
+  form.set("notes", "  Lok  lak ");
 
   return form;
 };
@@ -254,9 +269,11 @@ describe("adding and removing places", () => {
     ).toBe(403);
     expect(rows).toEqual([]);
 
+    const RATINGS = { food: 5, service: 4, toilet: null, value: 3 };
+
     const response = await app.request(
       "/api/places",
-      post({ ...ROQUETTE_PLACE, visitedOn: "2026-10-12" })
+      post({ ...ROQUETTE_PLACE, ratings: RATINGS })
     );
 
     expect(response.status).toBe(201);
@@ -266,7 +283,7 @@ describe("adding and removing places", () => {
       cuisine: "Cambodian",
       mapsUrl: CAMBODGE.mapsUrl,
       name: "Le Petit Cambodge",
-      visitedOn: "2026-10-12",
+      ratings: RATINGS,
     });
     expect(
       await jsonOf(app.request("/api/places", post(ROQUETTE_PLACE)))
@@ -343,7 +360,40 @@ describe("adding and removing places", () => {
     });
   });
 
-  it("refuses a cuisine off the menu, a bad date, or a place Google does not list as a restaurant", async () => {
+  it("lets only an admin rate a place again, from one to five stars or none", async () => {
+    const { app, rows } = setUp();
+    const ratings = { food: 4, service: null, toilet: 2, value: 5 };
+
+    await app.request("/api/places", post(ROQUETTE_PLACE));
+
+    expect(
+      await statusOf(
+        app.request(
+          "/api/places/1/ratings",
+          put(ratings, { cookie: "session=friend", origin: ORIGIN })
+        )
+      )
+    ).toBe(403);
+    expect(
+      await statusOf(
+        app.request("/api/places/1/ratings", put({ ...ratings, food: 6 }))
+      )
+    ).toBe(400);
+    expect(
+      await statusOf(
+        app.request("/api/places/1/ratings", put({ ...ratings, food: 2.5 }))
+      )
+    ).toBe(400);
+    expect(
+      await statusOf(app.request("/api/places/9/ratings", put(ratings)))
+    ).toBe(404);
+    expect(
+      await jsonOf(app.request("/api/places/1/ratings", put(ratings)))
+    ).toEqual(ratings);
+    expect(rows[0]?.ratings).toEqual(ratings);
+  });
+
+  it("refuses a cuisine off the menu, a rating off the scale, or a place Google does not list as a restaurant", async () => {
     const { app } = setUp();
 
     expect(
@@ -358,7 +408,10 @@ describe("adding and removing places", () => {
       await statusOf(
         app.request(
           "/api/places",
-          post({ ...ROQUETTE_PLACE, visitedOn: "last week" })
+          post({
+            ...ROQUETTE_PLACE,
+            ratings: { food: 0, service: null, toilet: null, value: null },
+          })
         )
       )
     ).toBe(400);
@@ -435,9 +488,9 @@ describe("photos", () => {
 
     expect(response.status).toBe(201);
     expect(photo).toEqual({
-      caption: "Lok lak",
       height: 1200,
       id: "00000000-0000-4000-8000-000000000001",
+      notes: "Lok lak",
       width: 1600,
     });
     expect([...objects.keys()]).toEqual([
