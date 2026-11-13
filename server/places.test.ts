@@ -1,10 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
+import type { Ratings } from "../src/lib/api";
 import { connect } from "./db";
 import {
   addPhoto,
   addPlace,
   photoExists,
+  rate,
   readPlaces,
   removePhoto,
   removePlace,
@@ -16,17 +18,23 @@ import {
 const url = process.env.TEST_DATABASE_URL;
 const ADMIN = "00000000-0000-4000-8000-00000000000a";
 
-const place = (name: string, visitedOn: string | null) => ({
+const UNRATED: Ratings = {
+  food: null,
+  service: null,
+  toilet: null,
+  value: null,
+};
+
+const place = (name: string, ratings: Ratings = UNRATED) => ({
   address: "12 Rue de la Roquette 75011 Paris",
   area: "11th",
   cuisine: "Cambodian",
-  dish: "Lok lak",
   googlePlaceId: `ChIJ-${name}`,
   lat: 48.8536,
   lon: 2.3707,
   mapsUrl: `https://maps.google.com/?q=${name}`,
   name,
-  visitedOn,
+  ratings,
 });
 
 describe.skipIf(!url)("places in Postgres", () => {
@@ -41,8 +49,8 @@ describe.skipIf(!url)("places in Postgres", () => {
   });
 
   /** Adds a place that is not on the map yet: its id. */
-  const added = async (name: string, visitedOn: string | null) => {
-    const row = await addPlace(pool, place(name, visitedOn));
+  const added = async (name: string, ratings: Ratings = UNRATED) => {
+    const row = await addPlace(pool, place(name, ratings));
 
     if (!row) {
       throw new Error(`${name} was already on the map`);
@@ -51,23 +59,23 @@ describe.skipIf(!url)("places in Postgres", () => {
     return row.id;
   };
 
-  it("lists the most recently visited first, undated last, each with its photos in order", async () => {
-    const old = await added("Old", "2025-01-02");
-    const fresh = await added("Fresh", "2026-10-12");
+  it("lists the most recently added first, with its ratings and its photos in order", async () => {
+    const RATED = { food: 5, service: 4, toilet: null, value: 3 };
+    const old = await added("Old");
+    const fresh = await added("Fresh", RATED);
 
-    await added("Undated", null);
     await addPhoto(pool, {
-      caption: "one",
       height: 600,
       id: "00000000-0000-4000-8000-000000000001",
+      notes: "one",
       placeId: old,
       uploadedBy: ADMIN,
       width: 800,
     });
     await addPhoto(pool, {
-      caption: "two",
       height: 600,
       id: "00000000-0000-4000-8000-000000000002",
+      notes: "two",
       placeId: old,
       uploadedBy: ADMIN,
       width: 800,
@@ -75,34 +83,42 @@ describe.skipIf(!url)("places in Postgres", () => {
 
     const places = await readPlaces(pool);
 
-    expect(places.map((entry) => entry.name)).toEqual([
-      "Fresh",
-      "Old",
-      "Undated",
-    ]);
-    const { googlePlaceId: _id, ...shown } = place("Fresh", "2026-10-12");
+    expect(places.map((entry) => entry.name)).toEqual(["Fresh", "Old"]);
+    const { googlePlaceId: _id, ...shown } = place("Fresh", RATED);
 
     expect(places[0]).toEqual({ ...shown, id: fresh, photos: [] });
-    expect(places[1]?.photos.map((photo) => photo.caption)).toEqual([
+    expect(places[1]?.photos.map((photo) => photo.notes)).toEqual([
       "one",
       "two",
     ]);
   });
 
-  it("keeps each Google place once", async () => {
-    await added("Twice", null);
+  it("rates a place again, and only one that exists", async () => {
+    const id = await added("Rated");
+    const ratings = { food: 4, service: 2, toilet: 1, value: 5 };
 
-    expect(await addPlace(pool, place("Twice", "2026-10-12"))).toBeNull();
+    expect(await rate(pool, id, ratings)).toBe(true);
+    expect(await rate(pool, "999", ratings)).toBe(false);
+
+    const [rated] = await readPlaces(pool);
+
+    expect(rated?.ratings).toEqual(ratings);
+  });
+
+  it("keeps each Google place once", async () => {
+    await added("Twice");
+
+    expect(await addPlace(pool, place("Twice"))).toBeNull();
     expect(await readPlaces(pool)).toHaveLength(1);
   });
 
   it("adds photos only to a place that exists, and removes them with it", async () => {
-    const id = await added("Here", null);
+    const id = await added("Here");
 
     const photo = {
-      caption: "",
       height: 600,
       id: "00000000-0000-4000-8000-000000000003",
+      notes: "",
       uploadedBy: ADMIN,
       width: 800,
     };
