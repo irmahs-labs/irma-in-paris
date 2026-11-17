@@ -20,6 +20,17 @@ Always name the branch after the feature or fix it contains, never a random or g
 - Open the PR and stop there: never merge it, not even when CI is green. Irma reviews and clicks merge.
 - Deploys run on merge to `main`. Re-run a deploy only when Irma asks.
 
+## The context graph and the notes
+
+Irma's notes on every irmahs.dev app are in her Obsidian notes, the repo irmahs/my-obsidian-notes (checked out at `~/Dev/my-obsidian-notes`), under `Self Hosted/`.
+
+- Before starting work, read `Self Hosted/Context Graph.md` from that repo's `origin/main`: how irmahs.dev and every subdomain fit together (the proxy, the account service, which app talks to which, where each keeps its data). Without a checkout, read it with `gh api repos/irmahs/my-obsidian-notes/contents/Self%20Hosted/Context%20Graph.md -H "Accept: application/vnd.github.raw"`.
+- When a change alters what the app is or does, update the notes too:
+  - `Apps.md`, the app's section;
+  - `Technologies.md`, if it adds, removes or changes a technology;
+  - `Context Graph.md`, if it changes a subdomain, a redirect, a link between apps, who asks whom (sign-in, admin checks, internal calls), or where data lives. Update both the graph and the table.
+- The notes go in through their own pull request, like any other change: a branch from the notes repo's `origin/main`, never their `main`. The local checkout is often left on an old branch, so work in a `git worktree` of `origin/main` rather than touching it. Link the app's PR in the notes PR.
+
 ## Checks before pushing
 
 ```sh
