@@ -24,7 +24,8 @@ export const LanguageToggle = () => {
     <fieldset aria-label={t.label} className="lang-toggle">
       {LANGUAGES.map((option) => (
         <button
-          aria-label={LANGUAGE_NAMES[option]}
+          // The visible code first, so voice control can say "click EN"
+          aria-label={`${option.toUpperCase()}, ${LANGUAGE_NAMES[option]}`}
           aria-pressed={option === language}
           className="lang-toggle__option"
           key={option}
