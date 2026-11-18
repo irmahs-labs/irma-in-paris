@@ -1199,9 +1199,10 @@ select.field {
   background: var(--focus);
   color: var(--white);
 }
+/* Near-black on the red pin: the usual ink reads at only 3.8:1 there */
 .pin--place {
   background: var(--danger);
-  color: var(--ink);
+  color: #0f1411;
 }
 .maplibregl-marker:has(.pin[aria-pressed="true"]) {
   z-index: 2;
@@ -1807,4 +1808,47 @@ select.field {
   .btn--primary:not(:disabled):active {
     transform: none;
   }
+}
+
+/* ---------- the end of every page ----------
+   The footer pill, then every irmahs.dev app and the legal pages, as two
+   quiet rows of links (src/components/site-links.tsx) */
+.site-end {
+  margin: 8px auto 32px;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.site-end > :first-child {
+  margin: 0;
+}
+.site-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.site-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 14px;
+}
+.site-links a {
+  display: inline-block;
+  padding: 4px 2px;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site-links a:hover {
+  text-decoration-thickness: 2px;
 }

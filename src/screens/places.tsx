@@ -306,7 +306,7 @@ const Viewer = ({
             src={photoUrl(photo, "large")}
             width={photo.width}
             height={photo.height}
-            alt={photo.notes}
+            alt={photo.notes || t.photo}
           />
           <div className="viewer__foot">
             <span className="viewer__notes">{photo.notes}</span>

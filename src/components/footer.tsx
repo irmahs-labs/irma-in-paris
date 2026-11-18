@@ -1,4 +1,5 @@
 import { useCopy } from "../lib/language";
+import { SiteLinks } from "./site-links";
 
 /**
  * The foot of every page: where the live data comes from, then Cute
@@ -22,11 +23,12 @@ export const Footer = () => {
   const t = useCopy(COPY);
 
   return (
-    <>
+    <footer className="site-end">
       <p className="sources">{t.sources}</p>
-      <footer className="site-foot">
+      <p className="site-foot">
         {t.more} <a href="https://irmahs.dev">irmahs.dev</a>
-      </footer>
-    </>
+      </p>
+      <SiteLinks />
+    </footer>
   );
 };
