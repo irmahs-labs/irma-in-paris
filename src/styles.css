@@ -1811,8 +1811,8 @@ select.field {
 }
 
 /* ---------- the end of every page ----------
-   The footer pill, then every irmahs.dev app and the legal pages, as two
-   quiet rows of links (src/components/site-links.tsx) */
+   The footer pill, then the legal pages on irmahs.dev, as one quiet row of
+   links (src/components/site-links.tsx) */
 .site-end {
   margin: 8px auto 32px;
   padding: 0 16px;
@@ -1825,10 +1825,6 @@ select.field {
   margin: 0;
 }
 .site-links {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
