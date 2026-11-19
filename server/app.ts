@@ -171,11 +171,11 @@ const fail = (
 const upstreamFailed = (c: Context, error: string) => fail(c, 503, error);
 
 /**
- * What to tell the admin when Google said no: "google-key" when it refused
- * the key itself, which only fixing the key in Google Cloud mends.
+ * Google said no: "google-key" when it refused the key itself, which only
+ * fixing the key in Google Cloud mends, else "google".
  */
-const googleReason = (keyRefused: boolean) =>
-  keyRefused ? "google-key" : "google";
+const googleFailed = (c: Context, keyRefused: boolean) =>
+  upstreamFailed(c, keyRefused ? "google-key" : "google");
 
 /**
  * The server's routes: the weather, Vélib' and PRIM's transport, asked of
@@ -246,15 +246,11 @@ export const createApp = ({
     return next();
   });
 
-  /** Lets the request on only from an admin, on this site's own page. */
-  const adminOnly = async (
+  /** Lets the request on only from an admin: for reads, which browsers send without an Origin. */
+  const adminReads = async (
     c: Context<{ Variables: Variables }>,
     next: Next
   ) => {
-    if (c.req.header("origin") !== appOrigin) {
-      return fail(c, 403, "origin");
-    }
-
     const visitor = await whoIs(c.req.header("cookie"));
 
     if (!(visitor.admin && visitor.id)) {
@@ -265,6 +261,19 @@ export const createApp = ({
 
     return next();
   };
+
+  /** Lets the request on only from an admin, on this site's own page. */
+  const adminOnly = (c: Context<{ Variables: Variables }>, next: Next) =>
+    c.req.header("origin") === appOrigin
+      ? adminReads(c, next)
+      : fail(c, 403, "origin");
+
+  /** Removes both sizes of a photo; a file left behind is only space. */
+  const forgetPhoto = (id: string) =>
+    Promise.allSettled([
+      storage.remove(photoKey(id, "large")),
+      storage.remove(photoKey(id, "thumb")),
+    ]);
 
   app.get("/api/me", async (c) => {
     const visitor = await whoIs(c.req.header("cookie"));
@@ -529,22 +538,6 @@ export const createApp = ({
     windowMs: 60_000,
   });
 
-  /** Lets the request on only from an admin: for reads, which browsers send without an Origin. */
-  const adminReads = async (
-    c: Context<{ Variables: Variables }>,
-    next: Next
-  ) => {
-    const visitor = await whoIs(c.req.header("cookie"));
-
-    if (!(visitor.admin && visitor.id)) {
-      return fail(c, 403, "admin");
-    }
-
-    c.set("adminId", visitor.id);
-
-    return next();
-  };
-
   app.get("/api/places/search", adminReads, async (c) => {
     if (!google) {
       return fail(c, 503, "no-google-key");
@@ -566,10 +559,7 @@ export const createApp = ({
     } catch (error) {
       console.error("Google Places search", error);
 
-      return upstreamFailed(
-        c,
-        googleReason(error instanceof GoogleKeyRefusedError)
-      );
+      return googleFailed(c, error instanceof GoogleKeyRefusedError);
     }
   });
 
@@ -603,10 +593,7 @@ export const createApp = ({
     } catch (error) {
       console.error("Google Places details", error);
 
-      return upstreamFailed(
-        c,
-        googleReason(error instanceof GoogleKeyRefusedError)
-      );
+      return googleFailed(c, error instanceof GoogleKeyRefusedError);
     }
   });
 
@@ -634,10 +621,7 @@ export const createApp = ({
     } catch (error) {
       console.error("Google Places details", error);
 
-      return upstreamFailed(
-        c,
-        googleReason(error instanceof GoogleKeyRefusedError)
-      );
+      return googleFailed(c, error instanceof GoogleKeyRefusedError);
     }
 
     if (!found) {
@@ -689,13 +673,8 @@ export const createApp = ({
       return fail(c, 404, "place");
     }
 
-    // The rows are gone, so nothing shows them; a file left behind is only space.
-    await Promise.allSettled(
-      photos.flatMap((photo) => [
-        storage.remove(photoKey(photo, "large")),
-        storage.remove(photoKey(photo, "thumb")),
-      ])
-    );
+    // The rows are gone, so nothing shows them.
+    await Promise.all(photos.map(forgetPhoto));
 
     return c.body(null, 204);
   });
@@ -747,12 +726,6 @@ export const createApp = ({
       await storage.put(photoKey(id, "large"), largeBytes, "image/jpeg");
       await storage.put(photoKey(id, "thumb"), thumbBytes, "image/jpeg");
 
-      const forget = () =>
-        Promise.allSettled([
-          storage.remove(photoKey(id, "large")),
-          storage.remove(photoKey(id, "thumb")),
-        ]);
-
       let added: boolean;
 
       try {
@@ -765,12 +738,12 @@ export const createApp = ({
           width: size.width,
         });
       } catch (error) {
-        await forget();
+        await forgetPhoto(id);
         throw error;
       }
 
       if (!added) {
-        await forget();
+        await forgetPhoto(id);
 
         return fail(c, 404, "place");
       }
@@ -786,10 +759,7 @@ export const createApp = ({
       return fail(c, 404, "photo");
     }
 
-    await Promise.allSettled([
-      storage.remove(photoKey(id, "large")),
-      storage.remove(photoKey(id, "thumb")),
-    ]);
+    await forgetPhoto(id);
 
     return c.body(null, 204);
   });
