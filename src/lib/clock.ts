@@ -40,16 +40,12 @@ export const parisTime = (date: Date) => TIME.format(date);
 export const parisToday = (date: Date, language: Language = "en") =>
   TODAY[language].format(date).replace(",", "");
 
-/** Minutes since midnight in Paris. */
-export const parisMinutes = (date: Date) => {
-  const [hours = 0, minutes = 0] = parisTime(date).split(":").map(Number);
-
-  return hours * 60 + minutes;
-};
-
 /** "07:30" → 450 */
 export const minutesOf = (clock: string) => {
   const [hours = 0, minutes = 0] = clock.split(":").map(Number);
 
   return hours * 60 + minutes;
 };
+
+/** Minutes since midnight in Paris. */
+export const parisMinutes = (date: Date) => minutesOf(parisTime(date));

@@ -65,6 +65,9 @@ export const linesAnswer = z.object({
 
 const HEX = /^[0-9a-f]{6}$/iu;
 
+const hexOr = (value: string | undefined, fallback: string) =>
+  value && HEX.test(value) ? `#${value.toLowerCase()}` : fallback;
+
 /** A mode's lines from PRIM, with PRIM's colours where it gives them. */
 export const toLines = (
   mode: Mode,
@@ -86,19 +89,14 @@ export const toLines = (
         (entry) => entry.mode === mode && entry.code === code
       );
 
-      const colour =
-        line.color && HEX.test(line.color)
-          ? `#${line.color.toLowerCase()}`
-          : known?.colour;
-
-      const ink =
-        line.text_color && HEX.test(line.text_color)
-          ? `#${line.text_color.toLowerCase()}`
-          : known?.ink;
-
       return [
         {
-          ...lineOf(mode, code, colour ?? "#d4dd9c", ink ?? "#000000"),
+          ...lineOf(
+            mode,
+            code,
+            hexOr(line.color, known?.colour ?? "#d4dd9c"),
+            hexOr(line.text_color, known?.ink ?? "#000000")
+          ),
           prim: line.id,
         },
       ];
@@ -357,10 +355,7 @@ export const toDepartures = (
 
     const trains = byTerminus.get(towards) ?? [];
 
-    trains.push({
-      at: `${time.slice(9, 11)}:${time.slice(11, 13)}`,
-      minutes: Math.max(0, minutes),
-    });
+    trains.push({ at: clockOf(time), minutes: Math.max(0, minutes) });
     byTerminus.set(towards, trains);
   }
 
@@ -465,7 +460,7 @@ const startOf = (item: Disruption, now: Date): Localized => {
     return NO_START;
   }
 
-  const clock = `${begin.slice(9, 11)}:${begin.slice(11, 13)}`;
+  const clock = clockOf(begin);
 
   if (begin.slice(0, 8) === parisStamp(now).slice(0, 8)) {
     return {
@@ -701,9 +696,6 @@ const lineObject = z.object({
   physical_modes: z.optional(z.array(z.object({ id: z.string() }))),
   text_color: z.optional(z.string()),
 });
-
-const hexOr = (value: string | undefined, fallback: string) =>
-  value && HEX.test(value) ? `#${value.toLowerCase()}` : fallback;
 
 /** A line PRIM lists as a bus, as the bus screen shows it; null for anything else. */
 export const toBusLine = (line: z.infer<typeof lineObject>): BusLine | null =>
