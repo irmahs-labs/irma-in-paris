@@ -25,6 +25,10 @@ import type {
 export const PRIM_NAVITIA =
   "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia";
 
+/** PRIM's next departures in SIRI Lite, the one that says which platform a train leaves from. */
+export const PRIM_STOP_MONITORING =
+  "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
+
 /** A line as this app knows it, with PRIM's id for it. */
 export interface PrimLine extends TransitLine {
   prim: string;
@@ -691,6 +695,118 @@ export const toTrips = (
     .slice(0, TRIPS);
 };
 
+/** "stop_area:IDFM:71370" → "STIF:StopArea:SP:71370:", the stop as SIRI names it; null for any other id. */
+export const siriStopOf = (stopId: string): string | null => {
+  const zone = /^stop_area:IDFM:(?<zone>\d+)$/u.exec(stopId)?.groups?.zone;
+
+  return zone ? `STIF:StopArea:SP:${zone}:` : null;
+};
+
+/** "line:IDFM:C01740" → "STIF:Line::C01740:", the line as SIRI names it. */
+const siriLineOf = (lineId: string) =>
+  `STIF:Line::${lineId.replace(/^line:IDFM:/u, "")}:`;
+
+const siriText = z.optional(z.object({ value: z.optional(z.string()) }));
+
+export const stopMonitoringAnswer = z.object({
+  Siri: z.object({
+    ServiceDelivery: z.object({
+      StopMonitoringDelivery: z.optional(
+        z.array(
+          z.object({
+            MonitoredStopVisit: z.optional(
+              z.array(
+                z.object({
+                  MonitoredVehicleJourney: z.object({
+                    LineRef: siriText,
+                    MonitoredCall: z.optional(
+                      z.object({
+                        AimedDepartureTime: z.optional(z.string()),
+                        ArrivalPlatformName: siriText,
+                        DeparturePlatformName: siriText,
+                        ExpectedDepartureTime: z.optional(z.string()),
+                      })
+                    ),
+                  }),
+                })
+              )
+            ),
+          })
+        )
+      ),
+    }),
+  }),
+});
+
+const PARIS_CLOCK = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  hourCycle: "h23",
+  minute: "2-digit",
+  timeZone: "Europe/Paris",
+});
+
+/**
+ * The platform each of a line's trains leaves from, by its departure time
+ * in Paris ("19:28" → "3"), where SNCF gives one: often only a few minutes
+ * before the train leaves.
+ */
+export const toPlatforms = (
+  answer: z.infer<typeof stopMonitoringAnswer>,
+  lineId: string
+): Map<string, string> => {
+  const platforms = new Map<string, string>();
+  const line = siriLineOf(lineId);
+
+  for (const delivery of answer.Siri.ServiceDelivery.StopMonitoringDelivery ??
+    []) {
+    for (const visit of delivery.MonitoredStopVisit ?? []) {
+      const journey = visit.MonitoredVehicleJourney;
+      const call = journey.MonitoredCall;
+      const leaves = call?.ExpectedDepartureTime ?? call?.AimedDepartureTime;
+
+      const platform = (
+        call?.DeparturePlatformName?.value ??
+        call?.ArrivalPlatformName?.value ??
+        ""
+      ).trim();
+
+      const when = leaves ? new Date(leaves) : null;
+
+      if (
+        journey.LineRef?.value === line &&
+        platform &&
+        when &&
+        Number.isFinite(when.getTime())
+      ) {
+        platforms.set(PARIS_CLOCK.format(when), platform);
+      }
+    }
+  }
+
+  return platforms;
+};
+
+/** A train's platform: the one at its time, or a minute either side, as the two feeds round. */
+export const platformAt = (
+  platforms: ReadonlyMap<string, string>,
+  at: string
+): string | undefined => {
+  const [hours = 0, mins = 0] = at.split(":").map(Number);
+  const minutes = hours * 60 + mins;
+
+  for (const shift of [0, -1, 1]) {
+    const near = (minutes + shift + 1440) % 1440;
+    const clock = `${String(Math.floor(near / 60)).padStart(2, "0")}:${String(near % 60).padStart(2, "0")}`;
+    const platform = platforms.get(clock);
+
+    if (platform) {
+      return platform;
+    }
+  }
+
+  return undefined;
+};
+
 const BUS = "physical_mode:Bus";
 
 const lineObject = z.object({
@@ -848,7 +964,13 @@ export interface Prim {
     way?: DirectionId
   ) => Promise<Departures>;
   /** The next trains from one stop of a line that call at another. */
-  trips: (lineId: string, from: string, to: string) => Promise<Trip[]>;
+  trips: (
+    lineId: string,
+    from: string,
+    to: string,
+    /** Also ask SIRI which platform each train leaves from: for Transilien. */
+    withPlatforms?: boolean
+  ) => Promise<Trip[]>;
   /** The status of every line given, from one request per mode. */
   statuses: (lines: readonly PrimLine[]) => Promise<LineStatus[]>;
   searchBuses: (query: string) => Promise<BusLine[]>;
@@ -863,25 +985,56 @@ const physical = (mode: Mode) => encodeURIComponent(PHYSICAL_MODES[mode]);
 export const createPrim = ({
   apiKey,
   baseUrl = PRIM_NAVITIA,
+  stopMonitoringUrl = PRIM_STOP_MONITORING,
   fetcher = fetch,
 }: {
   apiKey: string;
   baseUrl?: string;
+  stopMonitoringUrl?: string;
   fetcher?: typeof fetch;
 }): Prim => {
-  const get = async <T>(path: string, schema: z.ZodMiniType<T>): Promise<T> => {
-    const response = await fetcher(`${baseUrl}/${path}`, {
+  const fetchFrom = async <T>(
+    url: string,
+    schema: z.ZodMiniType<T>
+  ): Promise<T> => {
+    const response = await fetcher(url, {
       headers: { accept: "application/json", apikey: apiKey },
       signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) {
       throw new Error(
-        `PRIM answered ${response.status} for ${path.split("?")[0]}`
+        `PRIM answered ${response.status} for ${url.split("?")[0]}`
       );
     }
 
     return schema.parse(await response.json());
+  };
+
+  const get = <T>(path: string, schema: z.ZodMiniType<T>) =>
+    fetchFrom(`${baseUrl}/${path}`, schema);
+
+  /** The platforms at a stop, for a line; none when SIRI can't say. */
+  const platformsAt = async (stopId: string, lineId: string) => {
+    const stop = siriStopOf(stopId);
+
+    if (!stop) {
+      return new Map<string, string>();
+    }
+
+    try {
+      const query = new URLSearchParams({ MonitoringRef: stop });
+
+      return toPlatforms(
+        await fetchFrom(`${stopMonitoringUrl}?${query}`, stopMonitoringAnswer),
+        lineId
+      );
+    } catch (error) {
+      // The trains still show, without their platform
+      console.error("PRIM stop monitoring", error);
+
+      return new Map<string, string>();
+    }
   };
 
   const id = encodeURIComponent;
@@ -1005,7 +1158,7 @@ export const createPrim = ({
 
       return mergeCalls(branches);
     },
-    trips: async (lineId, from, to) => {
+    trips: async (lineId, from, to, withPlatforms = false) => {
       const query = new URLSearchParams({
         "allowed_id[]": lineId,
         count: String(TRIPS),
@@ -1019,7 +1172,16 @@ export const createPrim = ({
         to,
       });
 
-      return toTrips(await get(`journeys?${query}`, journeysAnswer));
+      const [journeys, platforms] = await Promise.all([
+        get(`journeys?${query}`, journeysAnswer),
+        withPlatforms ? platformsAt(from, lineId) : new Map<string, string>(),
+      ]);
+
+      return toTrips(journeys).map((trip) => {
+        const platform = platformAt(platforms, trip.at);
+
+        return platform ? { ...trip, platform } : trip;
+      });
     },
   };
 };

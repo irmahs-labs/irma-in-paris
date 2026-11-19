@@ -14,6 +14,10 @@ import {
   toDirections,
   toNearbyDepartures,
   toTrips,
+  platformAt,
+  siriStopOf,
+  stopMonitoringAnswer,
+  toPlatforms,
   vehicleJourneysAnswer,
   describe as describeDisruption,
   lineReportsAnswer,
@@ -675,5 +679,51 @@ describe("terminusName", () => {
     expect(terminusName(`${"(".repeat(50_000)}x`)).toBe(
       `${"(".repeat(50_000)}x`
     );
+  });
+});
+
+/** A train in a SIRI answer: its line, when it leaves, and its platform if SNCF gave one. */
+const siriVisit = (lineRef: string, leaves: string, platform?: string) => ({
+  MonitoredVehicleJourney: {
+    LineRef: { value: lineRef },
+    MonitoredCall: {
+      AimedDepartureTime: leaves,
+      // No platform yet: an empty value, which toPlatforms skips
+      ArrivalPlatformName: { value: platform },
+    },
+  },
+});
+
+describe("Transilien platforms", () => {
+  const answer = stopMonitoringAnswer.parse({
+    Siri: {
+      ServiceDelivery: {
+        StopMonitoringDelivery: [
+          {
+            MonitoredStopVisit: [
+              siriVisit("STIF:Line::C01740:", "2026-11-12T18:28:00.000Z", "3"),
+              siriVisit("STIF:Line::C01740:", "2026-11-12T18:43:00.000Z"),
+              siriVisit("STIF:Line::C01739:", "2026-11-12T18:30:00.000Z", "9"),
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  it("names a stop area as SIRI does", () => {
+    expect(siriStopOf("stop_area:IDFM:71370")).toBe("STIF:StopArea:SP:71370:");
+    expect(siriStopOf("stop_point:IDFM:1")).toBeNull();
+  });
+
+  it("knows each of the line's trains' platform by its Paris time", () => {
+    const platforms = toPlatforms(answer, "line:IDFM:C01740");
+
+    // 18:28 UTC is 19:28 in Paris in November; another line's train is left out
+    expect([...platforms]).toEqual([["19:28", "3"]]);
+    expect(platformAt(platforms, "19:28")).toBe("3");
+    // The two feeds can round a minute apart
+    expect(platformAt(platforms, "19:29")).toBe("3");
+    expect(platformAt(platforms, "19:43")).toBeUndefined();
   });
 });

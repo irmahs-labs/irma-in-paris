@@ -13,6 +13,7 @@ const NO_KEY = "no-prim-key";
 const COPY = {
   en: {
     arrives: (at: string) => `arrives ${at}`,
+    platform: (name: string) => `platform ${name}`,
     direction: "2 · Direction",
     findOne: (n: number) => `Find one of ${n} stops`,
     findStop: (line: string) => `Find a stop on ${line}`,
@@ -35,6 +36,7 @@ const COPY = {
   },
   fr: {
     arrives: (at: string) => `arrive à ${at}`,
+    platform: (name: string) => `voie ${name}`,
     direction: "2 · Direction",
     findOne: (n: number) => `Chercher parmi ${n} arrêts`,
     findStop: (line: string) => `Chercher un arrêt sur ${line}`,
@@ -341,6 +343,11 @@ const TripTimes = ({
               </span>
               <span className="trip__arrives">{t.arrives(trip.arrives)}</span>
               <span className="trip__towards">{t.towards(trip.towards)}</span>
+              {trip.platform ? (
+                <span className="trip__platform">
+                  {t.platform(trip.platform)}
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
