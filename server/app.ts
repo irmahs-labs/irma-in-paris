@@ -487,9 +487,12 @@ export const createApp = ({
         return fail(c, 400, "stop");
       }
 
+      // Transilien trains also say their platform, which SNCF gives
+      const platforms = Boolean(c.req.query("line")?.startsWith("transilien:"));
+
       return c.json({
         trips: await tripsCache(`${lineId}|${from}|${to}`, () =>
-          live.trips(lineId, from, to)
+          live.trips(lineId, from, to, platforms)
         ),
       } satisfies Trips);
     })

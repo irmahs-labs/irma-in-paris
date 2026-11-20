@@ -114,6 +114,8 @@ export interface Trip {
   towards: string;
   /** False when the time is the timetable's, not live. */
   live: boolean;
+  /** "3", the platform it leaves from, when SNCF gives one (Transilien). */
+  platform?: string;
 }
 
 export interface Trips {

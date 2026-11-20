@@ -944,6 +944,15 @@ select.field {
 .trip__towards {
   font-size: 12.5px;
 }
+/* The platform, as a small pill: where to stand matters before the time */
+.trip__platform {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border: var(--stroke-base) solid currentColor;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
 /* The bus stops near the rider. */
 .nearby {
   display: grid;
