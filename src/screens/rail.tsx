@@ -10,6 +10,7 @@ import type { LinesReport, TrafficReport } from "../lib/api";
 import { parisTime } from "../lib/clock";
 import type { Language } from "../lib/language";
 import { useCopy, useLanguage } from "../lib/language";
+import { saveLine, savedLine } from "../lib/rail-memory";
 import { useApi } from "../lib/use-api";
 
 const COPY = {
@@ -51,7 +52,8 @@ const refOf = (line: TransitLine, language: Language): LineRef => ({
  * leave from, since not every train calls everywhere on their branches.
  */
 const NextTrain = ({ lines }: { lines: readonly TransitLine[] }) => {
-  const [lineKey, setLineKey] = useState<string>();
+  // The line picked last in this browser, if it still runs
+  const [lineKey, setLineKey] = useState(savedLine);
   const line = lines.find((entry) => entry.key === lineKey);
   const language = useLanguage();
   const t = COPY[language];
@@ -79,7 +81,10 @@ const NextTrain = ({ lines }: { lines: readonly TransitLine[] }) => {
                   aria-pressed={entry.key === line?.key}
                   className={`badge badge--${entry.mode} badge--pick`}
                   style={{ background: entry.colour, color: entry.ink }}
-                  onClick={() => setLineKey(entry.key)}
+                  onClick={() => {
+                    setLineKey(entry.key);
+                    saveLine(entry.key);
+                  }}
                 >
                   {shownCode(entry.code)}
                 </button>
