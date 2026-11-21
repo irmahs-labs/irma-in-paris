@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import type { Departures, Direction, Stop, Trips } from "../lib/api";
 import { nearestTo } from "../lib/geo";
 import { useCopy } from "../lib/language";
+import { saveTrip, savedTrip } from "../lib/rail-memory";
+import type { SavedTrip } from "../lib/rail-memory";
 import { useApi } from "../lib/use-api";
 import { useLocation } from "../lib/use-location";
 import { LocateButton } from "./locate-button";
@@ -362,13 +364,26 @@ const TripTimes = ({
  * branches not every train stops everywhere.
  */
 export const TripFlow = ({ line }: { line: LineRef }) => {
-  const [to, setTo] = useState<Stop | null>(null);
-  const [from, setFrom] = useState<Stop | null>(null);
+  // The last trip looked up on this line comes back, by its stops' ids
+  const [trip, setTrip] = useState(() => savedTrip(line.query));
   const t = useCopy(COPY);
 
   const stops = useApi<Stop[]>(
     `/api/transport/stops?${new URLSearchParams({ line: line.query })}`
   );
+
+  const to = stops.data?.find((stop) => stop.id === trip.to) ?? null;
+
+  const from =
+    stops.data?.find((stop) => stop.id === trip.from && stop.id !== to?.id) ??
+    null;
+
+  const choose = (next: SavedTrip) => {
+    setTrip(next);
+    saveTrip(line.query, next);
+  };
+
+  const setFrom = (stop: Stop) => choose({ ...trip, from: stop.id });
 
   const others = useMemo(
     () => stops.data?.filter((stop) => stop.id !== to?.id),
@@ -387,13 +402,12 @@ export const TripFlow = ({ line }: { line: LineRef }) => {
           line={line}
           stops={stops.data}
           picked={to}
-          onPick={(stop) => {
-            setTo(stop);
-
-            if (stop.id === from?.id) {
-              setFrom(null);
-            }
-          }}
+          onPick={(stop) =>
+            choose({
+              from: stop.id === trip.from ? null : trip.from,
+              to: stop.id,
+            })
+          }
         />
       </div>
       {to ? (
