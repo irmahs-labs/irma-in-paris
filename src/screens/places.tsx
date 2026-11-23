@@ -43,6 +43,7 @@ const COPY = {
     photo: "Photo",
     photosOf: (name: string) => `Photos of ${name}`,
     pickOne: "Pick one",
+    pickPlace: "Pick a restaurant",
     pinLabel: (name: string, average: string | null) =>
       average ? `${name}, ${average} stars on average` : name,
     rated: {
@@ -61,7 +62,7 @@ const COPY = {
     search: "Search Google Maps by name",
     selected: "selected",
     stars: (count: number) => `${count} out of 5`,
-    sub: "Restaurants I've eaten at in Paris. Tap a pin or a name.",
+    sub: "Restaurants I've eaten at in Paris. Tap a pin or pick one from the menu.",
     sure: "sure?",
     sureAgain: "sure? press again",
     surePhoto: "Sure? Press again to remove this photo",
@@ -90,6 +91,7 @@ const COPY = {
     photo: "Photo",
     photosOf: (name: string) => `Photos de ${name}`,
     pickOne: "Choisir",
+    pickPlace: "Choisir un restaurant",
     pinLabel: (name: string, average: string | null) =>
       average ? `${name}, ${average} étoiles en moyenne` : name,
     rated: {
@@ -108,7 +110,7 @@ const COPY = {
     search: "Chercher sur Google Maps par nom",
     selected: "sélection",
     stars: (count: number) => `${count} sur 5`,
-    sub: "Les restaurants où j’ai mangé à Paris. Touchez une épingle ou un nom.",
+    sub: "Les restaurants où j’ai mangé à Paris. Touchez une épingle ou choisissez-en un dans le menu.",
     sure: "sûr ?",
     sureAgain: "sûr ? appuyez encore",
     surePhoto: "Sûr ? Appuyez encore pour retirer cette photo",
@@ -682,7 +684,7 @@ export const PlacesScreen = () => {
       </div>
       <AppWindow title="places_ive_been.map" size="full">
         {error && !data ? <p className="notice">{t.failed}</p> : null}
-        <div className="split">
+        <div className="places-layout">
           <LazyMap
             label={t.map}
             focus={picked}
@@ -719,45 +721,32 @@ export const PlacesScreen = () => {
             {data && places.length === 0 ? (
               <p className="hint">{t.noPlaces(isAdmin)}</p>
             ) : null}
-            <ul className="places__list">
-              {places.map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    aria-pressed={entry.id === place?.id}
-                    className="place-row"
-                    onClick={() => setPicked(entry.id)}
-                  >
-                    {entry.photos[0] ? (
-                      <img
-                        className="place-row__photo"
-                        src={photoUrl(entry.photos[0], "thumb")}
-                        alt=""
-                        loading="lazy"
-                      />
-                    ) : null}
-                    <span className="place-row__text">
-                      <span className="place-row__name">{entry.name}</span>
-                      <span className="place-row__more">
-                        {cuisineName(entry.cuisine, language)}
-                      </span>
-                      {averageText(entry.ratings, language) ? (
-                        <span
-                          className="place-row__stars"
-                          role="img"
-                          aria-label={t.average(
-                            averageText(entry.ratings, language) ?? ""
-                          )}
-                        >
-                          <Icon name="star" size={14} filled />
-                          {averageText(entry.ratings, language)}
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {places.length > 0 ? (
+              <label>
+                <span className="sr-only">{t.pickPlace}</span>
+                <select
+                  className="field"
+                  value={place?.id ?? ""}
+                  onChange={(event) => setPicked(event.target.value)}
+                >
+                  {places.map((entry) => {
+                    const average = averageText(entry.ratings, language);
+
+                    return (
+                      <option key={entry.id} value={entry.id}>
+                        {[
+                          entry.name,
+                          cuisineName(entry.cuisine, language),
+                          average ? `★ ${average}` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            ) : null}
             {place ? (
               <div className="selected">
                 <span className="tile__label">{t.selected}</span>
