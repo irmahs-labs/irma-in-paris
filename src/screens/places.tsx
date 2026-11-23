@@ -43,7 +43,6 @@ const COPY = {
     photo: "Photo",
     photosOf: (name: string) => `Photos of ${name}`,
     pickOne: "Pick one",
-    pickPlace: "Pick a restaurant",
     pinLabel: (name: string, average: string | null) =>
       average ? `${name}, ${average} stars on average` : name,
     rated: {
@@ -91,7 +90,6 @@ const COPY = {
     photo: "Photo",
     photosOf: (name: string) => `Photos de ${name}`,
     pickOne: "Choisir",
-    pickPlace: "Choisir un restaurant",
     pinLabel: (name: string, average: string | null) =>
       average ? `${name}, ${average} étoiles en moyenne` : name,
     rated: {
@@ -723,7 +721,7 @@ export const PlacesScreen = () => {
             ) : null}
             {places.length > 0 ? (
               <label>
-                <span className="sr-only">{t.pickPlace}</span>
+                <span className="sr-only">{t.restaurant}</span>
                 <select
                   className="field"
                   value={place?.id ?? ""}
