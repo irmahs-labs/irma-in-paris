@@ -1388,6 +1388,11 @@ select.field {
 }
 
 /* ── places ── */
+/* The map across the panel, the restaurant menu and the selected one under it. */
+.places-layout {
+  display: grid;
+  gap: 16px;
+}
 .places {
   position: relative;
   flex: 2 1 280px;
@@ -1397,59 +1402,6 @@ select.field {
   gap: 12px;
   margin: 0;
   padding: 16px 12px 12px;
-}
-.places__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.place-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 12px;
-  border: var(--line);
-  border-radius: var(--radius-field);
-  background: var(--raised);
-  color: var(--text);
-  text-align: left;
-}
-.place-row:hover {
-  background: var(--raised-hover);
-}
-.place-row[aria-pressed="true"] {
-  background: var(--selected);
-  color: var(--on-selected);
-}
-/* The restaurant's first photo, when there is one. */
-.place-row__photo {
-  flex: none;
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  border: var(--stroke-base) solid var(--outline);
-  border-radius: var(--radius-sm);
-}
-.place-row__stars {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font: 600 13px/1.2 var(--display);
-}
-.place-row__stars svg {
-  color: var(--gold);
-  stroke: var(--ink);
-}
-.place-row__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 .place-row__name {
   font-size: 15px;
